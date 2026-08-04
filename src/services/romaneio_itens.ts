@@ -22,6 +22,7 @@ export const updateRomaneioItem = (
     peso_total_kg: number
     caixas: number
     pecas: number
+    carregado: boolean
   }>,
 ) => pb.collection('romaneio_itens').update<RomaneioItem>(id, data)
 

@@ -9,7 +9,7 @@ import {
   Lock,
   Unlock,
   Trash2,
-  Edit,
+  PackageCheck,
 } from 'lucide-react'
 import { Romaneio, RomaneioItem, Produto } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ImportWizardModal } from '@/components/ImportWizardModal'
 import { PrintManifest } from '@/components/PrintManifest'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -63,6 +64,13 @@ export default function RomaneioDetail() {
   const [pesoManual, setPesoManual] = useState<number | ''>('')
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  const sortedItens = [...itens].sort((a, b) => {
+    const aCarregado = a.carregado ? 1 : 0
+    const bCarregado = b.carregado ? 1 : 0
+    if (aCarregado !== bCarregado) return aCarregado - bCarregado
+    return new Date(a.created).getTime() - new Date(b.created).getTime()
+  })
 
   const loadData = async () => {
     if (!id) return
@@ -144,6 +152,21 @@ export default function RomaneioDetail() {
       loadData()
     } catch {
       /* intentionally ignored */
+    }
+  }
+
+  const handleToggleCarregado = async (item: RomaneioItem) => {
+    try {
+      await updateRomaneioItem(item.id, { carregado: !item.carregado })
+      setItens((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, carregado: !i.carregado } : i)),
+      )
+      toast({
+        title: !item.carregado ? 'Item marcado como carregado' : 'Item desmarcado',
+        description: !item.carregado ? 'Movido para o final da lista.' : undefined,
+      })
+    } catch {
+      toast({ title: 'Erro ao atualizar item', variant: 'destructive' })
     }
   }
 
@@ -292,6 +315,7 @@ export default function RomaneioDetail() {
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
+                  <TableHead className="w-12 text-center">Carregado</TableHead>
                   <TableHead>Produto</TableHead>
                   <TableHead className="text-right">Peso Total (kg)</TableHead>
                   <TableHead className="text-center">Caixas</TableHead>
@@ -301,9 +325,24 @@ export default function RomaneioDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {itens.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-bold text-slate-800">
+                {sortedItens.map((item) => (
+                  <TableRow key={item.id} className={item.carregado ? 'opacity-50' : ''}>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          checked={item.carregado}
+                          onCheckedChange={() => handleToggleCarregado(item)}
+                          className={
+                            item.carregado ? 'border-emerald-500 bg-emerald-500 text-white' : ''
+                          }
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      className={`font-bold text-slate-800 ${
+                        item.carregado ? 'line-through text-slate-400' : ''
+                      }`}
+                    >
                       {item.expand?.produto?.nome || 'Produto'}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
@@ -416,7 +455,7 @@ export default function RomaneioDetail() {
         </DialogContent>
       </Dialog>
 
-      <PrintManifest romaneio={romaneio} itens={itens} />
+      <PrintManifest romaneio={romaneio} itens={sortedItens} />
     </>
   )
 }

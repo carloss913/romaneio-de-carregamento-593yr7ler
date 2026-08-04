@@ -35,7 +35,7 @@ export default function Layout() {
         </div>
         <div>
           <h1 className="text-base font-black tracking-tight text-white leading-tight">
-            Catálogo Carga
+            Romaneio de Carregamento
           </h1>
           <p className="text-xs text-slate-400 font-medium">Gestão de Camions</p>
         </div>
@@ -165,7 +165,7 @@ export default function Layout() {
             <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center text-white">
               <Truck className="w-4 h-4" />
             </div>
-            <span className="font-bold text-sm">Catálogo Carga</span>
+            <span className="font-bold text-sm">Romaneio de Carga</span>
           </div>
         </div>
         <Button

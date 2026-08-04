@@ -16,7 +16,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
       {/* Header */}
       <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
         <div>
-          <h1 className="text-2xl font-black tracking-tight uppercase">Catálogo de Carregamento</h1>
+          <h1 className="text-2xl font-black tracking-tight uppercase">Romaneio de Carregamento</h1>
           <p className="text-sm font-semibold text-slate-600">
             Manifesto de Carga e Conferência de Frigorífico
           </p>
@@ -42,6 +42,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
       <table className="w-full text-left border-collapse mb-8 text-sm">
         <thead>
           <tr className="border-b-2 border-slate-800">
+            <th className="py-2 text-center">✓</th>
             <th className="py-2">Item / Produto</th>
             <th className="py-2 text-right">Peso Total (kg)</th>
             <th className="py-2 text-center">Caixas</th>
@@ -50,9 +51,14 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
           </tr>
         </thead>
         <tbody>
-          {itens.map((item, idx) => (
+          {itens.map((item) => (
             <tr key={item.id} className="border-b border-slate-200">
-              <td className="py-2 font-medium">{item.expand?.produto?.nome || 'Produto'}</td>
+              <td className="py-2 text-center">{item.carregado ? '✓' : ''}</td>
+              <td
+                className={`py-2 font-medium ${item.carregado ? 'line-through text-slate-400' : ''}`}
+              >
+                {item.expand?.produto?.nome || 'Produto'}
+              </td>
               <td className="py-2 text-right tabular-nums">{item.peso_total_kg.toFixed(1)} kg</td>
               <td className="py-2 text-center tabular-nums">{item.caixas} cx</td>
               <td className="py-2 text-center tabular-nums">{item.pecas} pct</td>

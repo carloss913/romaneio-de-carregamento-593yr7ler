@@ -24,6 +24,7 @@ export interface RomaneioItem extends RecordModel {
   peso_total_kg: number
   caixas: number
   pecas: number
+  carregado: boolean
   expand?: {
     produto?: Produto
     romaneio?: Romaneio
