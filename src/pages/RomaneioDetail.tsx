@@ -125,6 +125,7 @@ export default function RomaneioDetail() {
       Number(pesoManual),
       prod.peso_caixa_kg,
       prod.peso_peca_kg,
+      prod.pecas_por_caixa,
     )
 
     try {

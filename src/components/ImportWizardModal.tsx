@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableHeader,
@@ -30,17 +31,15 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
-  HelpCircle,
   ArrowRight,
   Plus,
+  Trash2,
+  AlertCircle,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Produto, RomaneioItem } from '@/types/database'
 import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
-import {
-  convertWeightToBoxesAndPieces,
-  normalizeProductName,
-  parseBrazilianWeight,
-} from '@/lib/conversion'
+import { convertWeightToBoxesAndPieces, parseBrazilianWeight } from '@/lib/conversion'
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
 import { ProdutoModal } from './ProdutoModal'
@@ -58,11 +57,12 @@ interface ImportWizardModalProps {
 
 interface ProcessedRow {
   id: string
-  rawName: string
-  rawWeight: string
+  rawCode: string
   pesoKg: number
   matchedProduto?: Produto
   matchStatus: 'ok' | 'nao_encontrado' | 'peso_invalido'
+  weightWarning: boolean
+  weightWarningMessage?: string
   caixas: number
   pecas: number
   textoFormatado: string
@@ -85,14 +85,18 @@ export function ImportWizardModal({
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([])
   const [substituir, setSubstituir] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [weightAcknowledged, setWeightAcknowledged] = useState(false)
   const [novoProdutoModal, setNovoProdutoModal] = useState<{
     open: boolean
     initialName: string
     rowId?: string
-  }>({
-    open: false,
-    initialName: '',
-  })
+  }>({ open: false, initialName: '' })
+
+  const blockedRows = processedRows.filter(
+    (r) => r.matchStatus === 'nao_encontrado' || r.matchStatus === 'peso_invalido',
+  )
+  const weightWarningRows = processedRows.filter((r) => r.matchStatus === 'ok' && r.weightWarning)
+  const validRows = processedRows.filter((r) => r.matchStatus === 'ok')
 
   const resetWizard = () => {
     setStep(1)
@@ -102,6 +106,7 @@ export function ImportWizardModal({
     setColPeso('')
     setProcessedRows([])
     setSubstituir(false)
+    setWeightAcknowledged(false)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,105 +133,133 @@ export function ImportWizardModal({
     }
   }
 
+  const applyConversion = (row: ProcessedRow, produto: Produto, pesoKg: number): ProcessedRow => {
+    const conv = convertWeightToBoxesAndPieces(
+      pesoKg,
+      produto.peso_caixa_kg,
+      produto.peso_peca_kg,
+      produto.pecas_por_caixa,
+    )
+    return {
+      ...row,
+      matchedProduto: produto,
+      matchStatus: pesoKg <= 0 ? 'peso_invalido' : 'ok',
+      weightWarning: conv.weightWarning,
+      weightWarningMessage: conv.weightWarningMessage,
+      caixas: conv.caixas,
+      pecas: conv.pecas,
+      textoFormatado: conv.textoFormatado,
+    }
+  }
+
   const processSheetRows = () => {
     if (!parsedData || !colProduto || !colPeso) return
-
-    const aggregated: Record<string, { rawName: string; pesoTotal: number }> = {}
+    const aggregated: Record<string, { rawCode: string; pesoTotal: number }> = {}
 
     parsedData.rows.forEach((row) => {
-      const name = (row[colProduto] || '').trim()
+      const code = (row[colProduto] || '').trim()
       const weightRaw = row[colPeso] || ''
-      if (!name) return
-
+      if (!code) return
       const weight = parseBrazilianWeight(weightRaw)
-      const normKey = normalizeProductName(name)
-
-      if (aggregated[normKey]) {
-        aggregated[normKey].pesoTotal += weight
+      if (aggregated[code]) {
+        aggregated[code].pesoTotal += weight
       } else {
-        aggregated[normKey] = { rawName: name, pesoTotal: weight }
+        aggregated[code] = { rawCode: code, pesoTotal: weight }
       }
     })
 
-    const rows: ProcessedRow[] = Object.entries(aggregated).map(([normKey, item], idx) => {
-      const matched = produtos.find((p) => p.ativo && normalizeProductName(p.nome) === normKey)
+    const rows: ProcessedRow[] = Object.entries(aggregated).map(([code, item], idx) => {
+      const matched = produtos.find((p) => p.ativo && p.codigo && p.codigo.trim() === code)
       const pesoKg = item.pesoTotal
-
-      if (pesoKg <= 0) {
-        return {
-          id: `row-${idx}`,
-          rawName: item.rawName,
-          rawWeight: item.pesoTotal.toString(),
-          pesoKg: 0,
-          matchStatus: 'peso_invalido',
-          caixas: 0,
-          pecas: 0,
-          textoFormatado: '0 cx',
-        }
-      }
 
       if (!matched) {
         return {
           id: `row-${idx}`,
-          rawName: item.rawName,
-          rawWeight: item.pesoTotal.toString(),
+          rawCode: item.rawCode,
           pesoKg,
-          matchStatus: 'nao_encontrado',
+          matchStatus: 'nao_encontrado' as const,
+          weightWarning: false,
           caixas: 0,
           pecas: 0,
           textoFormatado: 'Sem produto',
         }
       }
 
-      const conv = convertWeightToBoxesAndPieces(
-        pesoKg,
-        matched.peso_caixa_kg,
-        matched.peso_peca_kg,
-      )
-      return {
+      const baseRow: ProcessedRow = {
         id: `row-${idx}`,
-        rawName: item.rawName,
-        rawWeight: item.pesoTotal.toString(),
+        rawCode: item.rawCode,
         pesoKg,
-        matchedProduto: matched,
-        matchStatus: 'ok',
-        caixas: conv.caixas,
-        pecas: conv.pecas,
-        textoFormatado: conv.textoFormatado,
+        matchStatus: 'ok' as const,
+        weightWarning: false,
+        caixas: 0,
+        pecas: 0,
+        textoFormatado: '',
       }
+      return applyConversion(baseRow, matched, pesoKg)
     })
 
     setProcessedRows(rows)
+    setWeightAcknowledged(false)
     setStep(3)
+  }
+
+  const setRowProduto = (rowId: string, produto: Produto) => {
+    setProcessedRows((prev) =>
+      prev.map((row) => (row.id === rowId ? applyConversion(row, produto, row.pesoKg) : row)),
+    )
   }
 
   const updateRowProduto = (rowId: string, produtoId: string) => {
     const prod = produtos.find((p) => p.id === produtoId)
     if (!prod) return
+    setRowProduto(rowId, prod)
+  }
 
+  const updateRowWeight = (rowId: string, newWeight: number) => {
     setProcessedRows((prev) =>
       prev.map((row) => {
         if (row.id !== rowId) return row
-        const conv = convertWeightToBoxesAndPieces(
-          row.pesoKg,
-          prod.peso_caixa_kg,
-          prod.peso_peca_kg,
-        )
-        return {
-          ...row,
-          matchedProduto: prod,
-          matchStatus: 'ok',
-          caixas: conv.caixas,
-          pecas: conv.pecas,
-          textoFormatado: conv.textoFormatado,
+        if (!row.matchedProduto) {
+          return {
+            ...row,
+            pesoKg: newWeight,
+            matchStatus: newWeight <= 0 ? ('peso_invalido' as const) : ('nao_encontrado' as const),
+          }
         }
+        return applyConversion(row, row.matchedProduto, newWeight)
       }),
     )
+    setWeightAcknowledged(false)
+  }
+
+  const removeRow = (rowId: string) => {
+    setProcessedRows((prev) => prev.filter((row) => row.id !== rowId))
+  }
+
+  const removeBlockedRows = () => {
+    setProcessedRows((prev) => prev.filter((row) => row.matchStatus === 'ok'))
   }
 
   const handleConfirmImport = async () => {
-    const validRows = processedRows.filter((r) => r.matchStatus === 'ok' && r.matchedProduto)
-    if (validRows.length === 0) {
+    if (blockedRows.length > 0) {
+      toast({
+        title: 'Itens bloqueados',
+        description: 'Remova ou corrija os itens com código não cadastrado ou peso inválido.',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (weightWarningRows.length > 0 && !weightAcknowledged) {
+      toast({
+        title: 'Confirmação necessária',
+        description: 'Marque a caixa confirmando que os pesos estão corretos.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const valid = processedRows.filter((r) => r.matchStatus === 'ok' && r.matchedProduto)
+    if (valid.length === 0) {
       toast({
         title: 'Nenhum item válido',
         description: 'Associe ao menos um produto antes de confirmar.',
@@ -237,14 +270,10 @@ export function ImportWizardModal({
 
     setLoading(true)
     try {
-      if (substituir) {
-        await deleteItensByRomaneio(romaneioId)
-      }
-
+      if (substituir) await deleteItensByRomaneio(romaneioId)
       let totalCaixas = 0
       let totalPecas = 0
-
-      for (const row of validRows) {
+      for (const row of valid) {
         if (!row.matchedProduto) continue
         await createRomaneioItem({
           romaneio: romaneioId,
@@ -256,14 +285,10 @@ export function ImportWizardModal({
         totalCaixas += row.caixas
         totalPecas += row.pecas
       }
-
-      if (file) {
-        await updateRomaneio(romaneioId, { arquivo_planilha: file }).catch(() => {})
-      }
-
+      if (file) await updateRomaneio(romaneioId, { arquivo_planilha: file }).catch(() => {})
       toast({
         title: 'Importação concluída!',
-        description: `${validRows.length} produtos importados (${totalCaixas} cx • ${totalPecas} pct).`,
+        description: `${valid.length} produtos importados (${totalCaixas} cx • ${totalPecas} pct).`,
       })
       onImportComplete()
       onOpenChange(false)
@@ -279,6 +304,11 @@ export function ImportWizardModal({
     }
   }
 
+  const canConfirm =
+    blockedRows.length === 0 &&
+    (weightWarningRows.length === 0 || weightAcknowledged) &&
+    validRows.length > 0
+
   return (
     <>
       <Dialog
@@ -288,7 +318,7 @@ export function ImportWizardModal({
           onOpenChange(v)
         }}
       >
-        <DialogContent className="sm:max-w-[720px] max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-[760px] max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-orange-500" />
@@ -296,20 +326,20 @@ export function ImportWizardModal({
             </DialogTitle>
           </DialogHeader>
 
-          {/* Stepper Header */}
           <div className="grid grid-cols-4 gap-2 text-center text-xs font-semibold py-2 border-b">
-            {['1. Arquivo', '2. Colunas', '3. Revisão', '4. Confirmar'].map((lbl, idx) => {
+            {['1. Arquivo', '2. Colunas', '3. Revisão', '4. Resumo'].map((lbl, idx) => {
               const current = idx + 1
               return (
                 <div
                   key={lbl}
-                  className={`py-1.5 rounded-md ${
+                  className={cn(
+                    'py-1.5 rounded-md',
                     step === current
                       ? 'bg-orange-500 text-white'
                       : step > current
                         ? 'bg-orange-100 text-orange-700'
-                        : 'bg-slate-100 text-slate-400'
-                  }`}
+                        : 'bg-slate-100 text-slate-400',
+                  )}
                 >
                   {lbl}
                 </div>
@@ -346,12 +376,12 @@ export function ImportWizardModal({
             {step === 2 && parsedData && (
               <div className="space-y-4">
                 <p className="text-sm text-slate-600">
-                  Mapeie as colunas da sua planilha correspondentes ao **Nome do Produto** e **Peso
-                  Total (kg)**:
+                  Mapeie as colunas da sua planilha correspondentes ao{' '}
+                  <strong>Código do Produto</strong> e <strong>Peso Total (kg)</strong>:
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label>Coluna do Produto</Label>
+                    <Label>Coluna do Código</Label>
                     <Select value={colProduto} onValueChange={setColProduto}>
                       <SelectTrigger>
                         <SelectValue />
@@ -365,7 +395,6 @@ export function ImportWizardModal({
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="space-y-1.5">
                     <Label>Coluna do Peso (kg)</Label>
                     <Select value={colPeso} onValueChange={setColPeso}>
@@ -382,7 +411,6 @@ export function ImportWizardModal({
                     </Select>
                   </div>
                 </div>
-
                 <div className="border rounded-lg p-3 bg-slate-50">
                   <p className="text-xs font-semibold text-slate-500 mb-2">
                     Pré-visualização das 3 primeiras linhas:
@@ -405,25 +433,39 @@ export function ImportWizardModal({
             {step === 3 && (
               <div className="space-y-3">
                 <p className="text-sm text-slate-600">
-                  Verifique a conversão automática em caixas e peças. Você pode vincular produtos
-                  não encontrados:
+                  Verifique a conversão automática em caixas e peças. Itros não cadastrados e pesos
+                  suspeitos são destacados:
                 </p>
-                <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+                <div className="border rounded-lg overflow-hidden max-h-[320px] overflow-y-auto">
                   <Table className="text-xs">
                     <TableHeader className="bg-slate-100 sticky top-0">
                       <TableRow>
-                        <TableHead>Item Planilha</TableHead>
+                        <TableHead>Código</TableHead>
                         <TableHead>Peso (kg)</TableHead>
-                        <TableHead>Produto Mapeado</TableHead>
+                        <TableHead>Produto</TableHead>
                         <TableHead>Resultado</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="w-8"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {processedRows.map((row) => (
                         <TableRow key={row.id}>
-                          <TableCell className="font-medium">{row.rawName}</TableCell>
-                          <TableCell>{row.pesoKg.toFixed(1)} kg</TableCell>
+                          <TableCell className="font-bold text-slate-800">{row.rawCode}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={row.pesoKg || ''}
+                              onChange={(e) =>
+                                updateRowWeight(
+                                  row.id,
+                                  e.target.value === '' ? 0 : Number(e.target.value),
+                                )
+                              }
+                              className="h-7 text-xs w-20"
+                            />
+                          </TableCell>
                           <TableCell>
                             {row.matchedProduto ? (
                               <span className="text-slate-800 font-semibold">
@@ -435,15 +477,15 @@ export function ImportWizardModal({
                                   value=""
                                   onValueChange={(val) => updateRowProduto(row.id, val)}
                                 >
-                                  <SelectTrigger className="h-7 text-xs w-[140px]">
+                                  <SelectTrigger className="h-7 text-xs w-[130px]">
                                     <SelectValue placeholder="Vincular..." />
                                   </SelectTrigger>
                                   <SelectContent>
                                     {produtos
-                                      .filter((p) => p.ativo)
+                                      .filter((p) => p.ativo && p.codigo)
                                       .map((p) => (
                                         <SelectItem key={p.id} value={p.id}>
-                                          {p.nome} ({p.peso_caixa_kg}kg)
+                                          {p.codigo} — {p.nome}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -456,7 +498,7 @@ export function ImportWizardModal({
                                   onClick={() =>
                                     setNovoProdutoModal({
                                       open: true,
-                                      initialName: row.rawName,
+                                      initialName: row.rawCode,
                                       rowId: row.id,
                                     })
                                   }
@@ -470,17 +512,26 @@ export function ImportWizardModal({
                             {row.textoFormatado}
                           </TableCell>
                           <TableCell>
-                            {row.matchStatus === 'ok' && (
+                            {row.matchStatus === 'ok' && !row.weightWarning && (
                               <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 border-emerald-500/30">
                                 <CheckCircle2 className="w-3 h-3 mr-1" /> OK
+                              </Badge>
+                            )}
+                            {row.matchStatus === 'ok' && row.weightWarning && (
+                              <Badge
+                                variant="outline"
+                                className="text-amber-600 border-amber-400 bg-amber-50"
+                                title={row.weightWarningMessage}
+                              >
+                                <AlertTriangle className="w-3 h-3 mr-1" /> Peso
                               </Badge>
                             )}
                             {row.matchStatus === 'nao_encontrado' && (
                               <Badge
                                 variant="outline"
-                                className="text-amber-600 border-amber-400 bg-amber-50"
+                                className="text-red-600 border-red-400 bg-red-50"
                               >
-                                <HelpCircle className="w-3 h-3 mr-1" /> Não Achado
+                                <AlertCircle className="w-3 h-3 mr-1" /> Não Cadastrado
                               </Badge>
                             )}
                             {row.matchStatus === 'peso_invalido' && (
@@ -489,22 +540,112 @@ export function ImportWizardModal({
                               </Badge>
                             )}
                           </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-300 hover:text-red-500"
+                              onClick={() => removeRow(row.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
+                {(blockedRows.length > 0 || weightWarningRows.length > 0) && (
+                  <div className="flex gap-3 text-xs">
+                    {blockedRows.length > 0 && (
+                      <span className="text-red-600 font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" /> {blockedRows.length} item(ns)
+                        bloqueado(s)
+                      </span>
+                    )}
+                    {weightWarningRows.length > 0 && (
+                      <span className="text-amber-600 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> {weightWarningRows.length}{' '}
+                        aviso(s) de peso
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
             {step === 4 && (
-              <div className="space-y-4 text-center py-4">
-                <CheckCircle2 className="w-12 h-10 text-emerald-500 mx-auto" />
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Pronto para importar!</h3>
+              <div className="space-y-4 py-2">
+                {blockedRows.length > 0 && (
+                  <div className="border border-red-300 rounded-xl p-4 bg-red-50 space-y-2">
+                    <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      Itens bloqueados ({blockedRows.length}):
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {blockedRows.map((row) => (
+                        <Badge key={row.id} variant="destructive" className="text-xs">
+                          {row.rawCode}
+                          {row.matchStatus === 'peso_invalido' ? ' (peso inválido)' : ''}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-red-600">
+                      Estes itens não podem ser importados. Registre os produtos, corrija os pesos
+                      ou remova as linhas.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={removeBlockedRows}
+                      className="text-red-600 border-red-300 hover:bg-red-100"
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" /> Remover itens bloqueados
+                    </Button>
+                  </div>
+                )}
+
+                {weightWarningRows.length > 0 && (
+                  <div className="border border-amber-300 rounded-xl p-4 bg-amber-50 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
+                      <AlertTriangle className="w-4 h-4" />
+                      Pesos potencialmente incorretos ({weightWarningRows.length}):
+                    </div>
+                    <div className="space-y-1 max-h-[120px] overflow-y-auto">
+                      {weightWarningRows.map((row) => (
+                        <div
+                          key={row.id}
+                          className="text-xs text-amber-800 flex justify-between gap-2"
+                        >
+                          <span className="font-medium">
+                            Código {row.rawCode}: {row.pesoKg.toFixed(1)} kg
+                          </span>
+                          <span className="text-amber-600">{row.weightWarningMessage}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                      <Checkbox
+                        checked={weightAcknowledged}
+                        onCheckedChange={(v) => setWeightAcknowledged(!!v)}
+                      />
+                      <span className="text-xs text-amber-800">
+                        Confirmo que revisei os pesos e estão corretos
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                <div className="text-center py-2">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                  <h3 className="text-lg font-bold text-slate-800 mt-2">Pronto para importar!</h3>
                   <p className="text-sm text-slate-500 mt-1">
-                    {processedRows.filter((r) => r.matchStatus === 'ok').length} itens válidos serão
-                    adicionados ao romaneio.
+                    {validRows.length} itens válidos serão adicionados ao romaneio.
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Total: {validRows.reduce((a, b) => a + b.caixas, 0)} caixas •{' '}
+                    {validRows.reduce((a, b) => a + b.pecas, 0)} peças
                   </p>
                 </div>
 
@@ -564,14 +705,14 @@ export function ImportWizardModal({
                 onClick={() => setStep(4)}
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
-                Avançar para Confirmação
+                Revisar Resumo
               </Button>
             )}
             {step === 4 && (
               <Button
                 type="button"
                 onClick={handleConfirmImport}
-                disabled={loading}
+                disabled={loading || !canConfirm}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {loading ? 'Importando...' : 'Confirmar Importação'}
@@ -583,12 +724,10 @@ export function ImportWizardModal({
 
       <ProdutoModal
         open={novoProdutoModal.open}
-        onOpenChange={(v) => setNovoProdutoModal((prev) => ({ ...prev, open: v }))}
+        onOpenChange={(v: boolean) => setNovoProdutoModal((prev) => ({ ...prev, open: v }))}
         initialName={novoProdutoModal.initialName}
-        onSuccess={(prod) => {
-          if (novoProdutoModal.rowId) {
-            updateRowProduto(novoProdutoModal.rowId, prod.id)
-          }
+        onSuccess={(prod: Produto) => {
+          if (novoProdutoModal.rowId) setRowProduto(novoProdutoModal.rowId, prod)
         }}
       />
     </>
