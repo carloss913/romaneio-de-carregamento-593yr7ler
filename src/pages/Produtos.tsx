@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, Edit2, Trash2, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, CheckCircle2, XCircle, Upload } from 'lucide-react'
 import { Produto } from '@/types/database'
 import { getProdutos, updateProduto, deleteProduto } from '@/services/produtos'
 import pb from '@/lib/pocketbase/client'
@@ -15,6 +15,7 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { ProdutoModal } from '@/components/ProdutoModal'
+import { ImportProdutosModal } from '@/components/ImportProdutosModal'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
 
@@ -24,6 +25,7 @@ export default function Produtos() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const loadData = async () => {
     try {
@@ -95,15 +97,24 @@ export default function Produtos() {
           </p>
         </div>
 
-        <Button
-          onClick={() => {
-            setSelectedProduto(null)
-            setModalOpen(true)
-          }}
-          className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-md shadow-orange-500/20"
-        >
-          <Plus className="w-4 h-4 mr-2" /> Novo Produto
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setImportOpen(true)}
+            variant="outline"
+            className="font-bold rounded-xl border-slate-300 text-slate-700 hover:bg-slate-50"
+          >
+            <Upload className="w-4 h-4 mr-2" /> Importar Planilha
+          </Button>
+          <Button
+            onClick={() => {
+              setSelectedProduto(null)
+              setModalOpen(true)
+            }}
+            className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-md shadow-orange-500/20"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Novo Produto
+          </Button>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -212,6 +223,8 @@ export default function Produtos() {
         produto={selectedProduto}
         onSuccess={loadData}
       />
+
+      <ImportProdutosModal open={importOpen} onOpenChange={setImportOpen} onSuccess={loadData} />
     </div>
   )
 }
