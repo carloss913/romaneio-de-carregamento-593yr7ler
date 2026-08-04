@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
 import { RotaType, ROTAS, Romaneio, RomaneioItem } from '@/types/database'
 import { getRomaneiosByRota, deleteRomaneio } from '@/services/romaneios'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { NovoRomaneioModal } from '@/components/NovoRomaneioModal'
@@ -29,12 +29,8 @@ export default function RotaDetail() {
   const [novoModalOpen, setNovoModalOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id?: string }>({ open: false })
 
-  if (!rotaConfig) {
-    navigate('/')
-    return null
-  }
-
   const loadData = async () => {
+    if (!rotaConfig) return
     try {
       const list = await getRomaneiosByRota(rotaDecoded)
       setRomaneios(list)
@@ -46,11 +42,19 @@ export default function RotaDetail() {
   }
 
   useEffect(() => {
+    if (!rotaConfig) {
+      navigate('/')
+      return
+    }
     loadData()
   }, [rotaDecoded])
 
   useRealtime('romaneios', () => loadData())
   useRealtime('romaneio_itens', () => loadData())
+
+  if (!rotaConfig) {
+    return null
+  }
 
   const handleDelete = async () => {
     if (!deleteDialog.id) return

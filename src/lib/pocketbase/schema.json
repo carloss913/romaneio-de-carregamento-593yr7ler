@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-04T22:33:12.859Z",
+  "generatedAt": "2026-08-04T22:42:35.426Z",
   "collections": [
     {
       "name": "users",
@@ -42,6 +42,191 @@
       "indexes": [
         "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
         "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      ]
+    },
+    {
+      "name": "produtos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "peso_caixa_kg",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "pecas_por_caixa",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "peso_peca_kg",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_produtos_nome ON produtos (nome)"]
+    },
+    {
+      "name": "romaneios",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "rota",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["Piçarra", "SFX", "Tucumã", "Floresta", "Outros"]
+        },
+        {
+          "name": "data",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["em_andamento", "finalizado"]
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "arquivo_planilha",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_romaneios_rota ON romaneios (rota)",
+        "CREATE INDEX idx_romaneios_data ON romaneios (data)",
+        "CREATE INDEX idx_romaneios_status ON romaneios (status)"
+      ]
+    },
+    {
+      "name": "romaneio_itens",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "romaneio",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "romaneios"
+        },
+        {
+          "name": "produto",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "produtos"
+        },
+        {
+          "name": "peso_total_kg",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "caixas",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "pecas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_romaneio_itens_romaneio ON romaneio_itens (romaneio)",
+        "CREATE INDEX idx_romaneio_itens_produto ON romaneio_itens (produto)"
       ]
     }
   ]

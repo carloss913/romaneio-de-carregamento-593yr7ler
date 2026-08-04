@@ -30,7 +30,7 @@ migrate(
         },
         { name: 'peso_total_kg', type: 'number', required: true, min: 0.01 },
         { name: 'caixas', type: 'number', required: true, min: 0, onlyInt: true },
-        { name: 'pecas', type: 'number', required: true, min: 0, onlyInt: true },
+        { name: 'pecas', type: 'number', min: 0, onlyInt: true },
         { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
         { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
       ],
