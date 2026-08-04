@@ -130,13 +130,19 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
       for (const r of valid) {
         const num = (s: string) => parseFloat(s.replace(',', '.'))
         const pc = num(r.peso_caixa_kg)
-        const pp = num(r.peso_peca_kg)
+        const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
+        let pecasPorCaixa = 0
+        if (r.pecas_por_caixa.trim()) {
+          pecasPorCaixa = parseInt(r.pecas_por_caixa) || 0
+        } else if (pp > 0 && pc > 0) {
+          pecasPorCaixa = Math.round(pc / pp)
+        }
         const data = {
           codigo: r.codigo,
           nome: r.nome,
           peso_caixa_kg: pc,
           peso_peca_kg: pp,
-          pecas_por_caixa: parseInt(r.pecas_por_caixa) || Math.round(pc / pp),
+          pecas_por_caixa: pecasPorCaixa,
         }
         if (r.status === 'atualizar' && r.existingId) {
           const ex = existing.find((p) => p.id === r.existingId)
@@ -280,8 +286,9 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
           {step === 3 && (
             <div className="space-y-3">
               <p className="text-sm text-slate-600">
-                {validCount} de {rows.length} linha(s) válida(s). Linhas com erro não serão
-                importadas.
+                {validCount === rows.length
+                  ? `${validCount} linha(s) válida(s) e pronta(s) para importação.`
+                  : `${validCount} de ${rows.length} linha(s) válida(s). Linhas com erro não serão importadas.`}
               </p>
               <div className="border rounded-lg overflow-auto max-h-[400px]">
                 <Table className="text-xs">

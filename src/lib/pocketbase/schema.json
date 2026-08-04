@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-04T23:25:33.069Z",
+  "generatedAt": "2026-08-04T23:41:30.544Z",
   "collections": [
     {
       "name": "users",
@@ -70,13 +70,13 @@
         {
           "name": "pecas_por_caixa",
           "type": "number",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
           "name": "peso_peca_kg",
           "type": "number",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
