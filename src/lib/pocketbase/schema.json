@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-04T23:02:48.824Z",
+  "generatedAt": "2026-08-04T23:05:46.101Z",
   "collections": [
     {
       "name": "users",
@@ -98,9 +98,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "codigo",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_produtos_nome ON produtos (nome)"]
+      "indexes": [
+        "CREATE INDEX `idx_produtos_nome_nonunique` ON `produtos` (nome)",
+        "CREATE UNIQUE INDEX `idx_produtos_codigo` ON `produtos` (codigo) WHERE codigo != ''"
+      ]
     },
     {
       "name": "romaneios",
