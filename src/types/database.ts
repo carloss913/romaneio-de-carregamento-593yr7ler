@@ -3,6 +3,7 @@ import { RecordModel } from 'pocketbase'
 export type RotaType = 'Piçarra' | 'SFX' | 'Tucumã' | 'Floresta' | 'Outros'
 
 export interface Produto extends RecordModel {
+  codigo: string
   nome: string
   peso_caixa_kg: number
   pecas_por_caixa: number

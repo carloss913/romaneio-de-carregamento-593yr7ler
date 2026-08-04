@@ -32,6 +32,7 @@ export function ProdutoModal({
 }: ProdutoModalProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [codigo, setCodigo] = useState('')
   const [nome, setNome] = useState('')
   const [pesoCaixa, setPesoCaixa] = useState<number | ''>(20)
   const [pecasPorCaixa, setPecasPorCaixa] = useState<number | ''>(4)
@@ -40,12 +41,14 @@ export function ProdutoModal({
 
   useEffect(() => {
     if (produto) {
+      setCodigo(produto.codigo || '')
       setNome(produto.nome)
       setPesoCaixa(produto.peso_caixa_kg)
       setPecasPorCaixa(produto.pecas_por_caixa)
       setPesoPeca(produto.peso_peca_kg)
       setAtivo(produto.ativo)
     } else {
+      setCodigo('')
       setNome(initialName || '')
       setPesoCaixa(20)
       setPecasPorCaixa(4)
@@ -93,6 +96,7 @@ export function ProdutoModal({
       let saved: Produto
       if (produto) {
         saved = await updateProduto(produto.id, {
+          codigo: codigo.trim(),
           nome: nome.trim(),
           peso_caixa_kg: Number(pesoCaixa),
           pecas_por_caixa: Number(pecasPorCaixa),
@@ -102,6 +106,7 @@ export function ProdutoModal({
         toast({ title: 'Produto atualizado!', description: `${saved.nome} foi salvo com sucesso.` })
       } else {
         saved = await createProduto({
+          codigo: codigo.trim(),
           nome: nome.trim(),
           peso_caixa_kg: Number(pesoCaixa),
           pecas_por_caixa: Number(pecasPorCaixa),
@@ -130,15 +135,27 @@ export function ProdutoModal({
           <DialogTitle>{produto ? 'Editar Produto' : 'Novo Produto'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="nome">Nome do Produto</Label>
-            <Input
-              id="nome"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Frango, Picanha..."
-              required
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="codigo">Código</Label>
+              <Input
+                id="codigo"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                placeholder="Ex: 1374"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="nome">Nome do Produto</Label>
+              <Input
+                id="nome"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Ex: Frango, Picanha..."
+                required
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

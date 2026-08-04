@@ -76,7 +76,11 @@ export default function Produtos() {
     }
   }
 
-  const filtered = produtos.filter((p) => p.nome.toLowerCase().includes(search.toLowerCase()))
+  const filtered = produtos.filter(
+    (p) =>
+      p.nome.toLowerCase().includes(search.toLowerCase()) ||
+      (p.codigo || '').toLowerCase().includes(search.toLowerCase()),
+  )
 
   return (
     <div className="space-y-6">
@@ -108,7 +112,7 @@ export default function Produtos() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar produto por nome..."
+          placeholder="Buscar por código ou nome..."
           className="pl-9 bg-white rounded-xl border-slate-200"
         />
       </div>
@@ -118,6 +122,7 @@ export default function Produtos() {
         <Table>
           <TableHeader className="bg-slate-50">
             <TableRow>
+              <TableHead>Código</TableHead>
               <TableHead>Produto</TableHead>
               <TableHead className="text-right">Peso Caixa (kg)</TableHead>
               <TableHead className="text-center">Peças por Caixa</TableHead>
@@ -129,13 +134,16 @@ export default function Produtos() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-slate-400">
+                <TableCell colSpan={7} className="text-center py-8 text-slate-400">
                   Nenhum produto encontrado.
                 </TableCell>
               </TableRow>
             ) : (
               filtered.map((p) => (
                 <TableRow key={p.id} className={!p.ativo ? 'opacity-50 bg-slate-50' : ''}>
+                  <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
+                    {p.codigo || '-'}
+                  </TableCell>
                   <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     {p.peso_caixa_kg.toFixed(1)} kg

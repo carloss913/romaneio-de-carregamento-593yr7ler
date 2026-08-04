@@ -1,11 +1,12 @@
 import pb from '@/lib/pocketbase/client'
 import { Produto } from '@/types/database'
 
-export const getProdutos = () => pb.collection('produtos').getFullList<Produto>({ sort: 'nome' })
+export const getProdutos = () => pb.collection('produtos').getFullList<Produto>({ sort: 'codigo' })
 
 export const getProduto = (id: string) => pb.collection('produtos').getOne<Produto>(id)
 
 export const createProduto = (data: {
+  codigo?: string
   nome: string
   peso_caixa_kg: number
   pecas_por_caixa: number
@@ -16,6 +17,7 @@ export const createProduto = (data: {
 export const updateProduto = (
   id: string,
   data: Partial<{
+    codigo: string
     nome: string
     peso_caixa_kg: number
     pecas_por_caixa: number
