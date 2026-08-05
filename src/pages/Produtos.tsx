@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Produto } from '@/types/database'
 import { getProdutos, updateProduto, deleteProduto } from '@/services/produtos'
+import { getConfiguracoes } from '@/services/configuracoes'
 import pb from '@/lib/pocketbase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,9 +26,11 @@ import {
 } from '@/components/ui/table'
 import { ProdutoModal } from '@/components/ProdutoModal'
 import { ImportProdutosModal } from '@/components/ImportProdutosModal'
+import { ConfigPhoneModal } from '@/components/ConfigPhoneModal'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { Settings } from 'lucide-react'
 
 export default function Produtos() {
   const { toast } = useToast()
@@ -37,6 +40,8 @@ export default function Produtos() {
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [showIncomplete, setShowIncomplete] = useState(false)
+  const [configOpen, setConfigOpen] = useState(false)
+  const [configPhone, setConfigPhone] = useState('')
 
   const isProdutoIncomplete = (p: Produto) =>
     !p.peso_caixa_kg ||
@@ -50,6 +55,12 @@ export default function Produtos() {
     try {
       const list = await getProdutos()
       setProdutos(list)
+      try {
+        const config = await getConfiguracoes()
+        setConfigPhone(config?.telefone_whatsapp || '')
+      } catch {
+        /* no config yet */
+      }
     } catch {
       /* intentionally ignored */
     }
@@ -127,7 +138,7 @@ export default function Produtos() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Button
             onClick={() => setImportOpen(true)}
             variant="outline"
@@ -143,6 +154,15 @@ export default function Produtos() {
             className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-md shadow-orange-500/20"
           >
             <Plus className="w-4 h-4 mr-2" /> Novo Produto
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setConfigOpen(true)}
+            className="text-slate-400 hover:text-slate-700"
+            title={configPhone ? `Telefone: ${configPhone}` : 'Configurar telefone'}
+          >
+            <Settings className="w-5 h-5" />
           </Button>
         </div>
       </div>
@@ -278,6 +298,8 @@ export default function Produtos() {
       />
 
       <ImportProdutosModal open={importOpen} onOpenChange={setImportOpen} onSuccess={loadData} />
+
+      <ConfigPhoneModal open={configOpen} onOpenChange={setConfigOpen} onSuccess={loadData} />
     </div>
   )
 }

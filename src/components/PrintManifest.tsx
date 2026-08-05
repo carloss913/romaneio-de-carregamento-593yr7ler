@@ -1,5 +1,6 @@
 import { Romaneio, RomaneioItem } from '@/types/database'
 import { RouteBadge } from './RouteBadge'
+import { formatBoxesAndPieces } from '@/lib/conversion'
 
 interface PrintManifestProps {
   romaneio: Romaneio
@@ -8,8 +9,13 @@ interface PrintManifestProps {
 
 export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
   const totalPeso = itens.reduce((acc, i) => acc + i.peso_total_kg, 0)
-  const totalCaixas = itens.reduce((acc, i) => acc + i.caixas, 0)
-  const totalPecas = itens.reduce((acc, i) => acc + i.pecas, 0)
+
+  const getItemQuantidade = (item: RomaneioItem): string => {
+    if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
+      return `${item.peso_total_kg.toFixed(1)} kg`
+    }
+    return formatBoxesAndPieces(item.caixas, item.pecas)
+  }
 
   return (
     <div className="hidden print:block p-8 bg-white text-black font-sans">
@@ -45,9 +51,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             <th className="py-2 text-center">✓</th>
             <th className="py-2">Item / Produto</th>
             <th className="py-2 text-right">Peso Total (kg)</th>
-            <th className="py-2 text-center">Caixas</th>
-            <th className="py-2 text-center">Peças Avulsas</th>
-            <th className="py-2 text-right">Resultado</th>
+            <th className="py-2 text-right">Quantidade</th>
           </tr>
         </thead>
         <tbody>
@@ -60,14 +64,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                 {item.expand?.produto?.nome || 'Produto'}
               </td>
               <td className="py-2 text-right tabular-nums">{item.peso_total_kg.toFixed(1)} kg</td>
-              <td className="py-2 text-center tabular-nums">{item.caixas} cx</td>
-              <td className="py-2 text-center tabular-nums">{item.pecas} pct</td>
-              <td className="py-2 text-right font-bold">
-                {item.caixas > 0 && `${item.caixas} cx`}
-                {item.caixas > 0 && item.pecas > 0 && ' + '}
-                {item.pecas > 0 && `${item.pecas} pct`}
-                {item.caixas === 0 && item.pecas === 0 && '0 cx'}
-              </td>
+              <td className="py-2 text-right font-bold">{getItemQuantidade(item)}</td>
             </tr>
           ))}
         </tbody>
@@ -75,9 +72,8 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
           <tr className="border-t-2 border-slate-900 font-bold bg-slate-50">
             <td className="py-3">TOTAL DA CARGA</td>
             <td className="py-3 text-right tabular-nums">{totalPeso.toFixed(1)} kg</td>
-            <td className="py-3 text-center tabular-nums">{totalCaixas} cx</td>
-            <td className="py-3 text-center tabular-nums">{totalPecas} pct</td>
             <td className="py-3 text-right">{itens.length} produtos</td>
+            <td className="py-3 text-right"></td>
           </tr>
         </tfoot>
       </table>

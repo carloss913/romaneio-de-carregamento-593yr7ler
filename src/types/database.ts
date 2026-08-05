@@ -33,6 +33,11 @@ export interface RomaneioItem extends RecordModel {
   }
 }
 
+export interface Configuracoes extends RecordModel {
+  telefone_whatsapp: string
+  nome_destinatario: string
+}
+
 export const ROTAS: { name: RotaType; color: string; bg: string; border: string; text: string }[] =
   [
     {

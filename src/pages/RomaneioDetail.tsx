@@ -9,7 +9,11 @@ import {
   Lock,
   Unlock,
   Trash2,
-  PackageCheck,
+  Share2,
+  Send,
+  Settings,
+  Save,
+  X,
 } from 'lucide-react'
 import { Romaneio, RomaneioItem, Produto } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
@@ -20,6 +24,7 @@ import {
   deleteRomaneioItem,
 } from '@/services/romaneio_itens'
 import { getProdutos } from '@/services/produtos'
+import { getConfiguracoes } from '@/services/configuracoes'
 import { convertWeightToBoxesAndPieces, formatBoxesAndPieces } from '@/lib/conversion'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -49,8 +54,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { ImportWizardModal } from '@/components/ImportWizardModal'
 import { PrintManifest } from '@/components/PrintManifest'
+import { ConfigPhoneModal } from '@/components/ConfigPhoneModal'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
 
@@ -62,6 +69,8 @@ export default function RomaneioDetail() {
   const [romaneio, setRomaneio] = useState<Romaneio | null>(null)
   const [itens, setItens] = useState<RomaneioItem[]>([])
   const [produtos, setProdutos] = useState<Produto[]>([])
+  const [configPhone, setConfigPhone] = useState('')
+  const [configOpen, setConfigOpen] = useState(false)
 
   const [importWizardOpen, setImportWizardOpen] = useState(false)
   const [manualItemModal, setManualItemModal] = useState(false)
@@ -69,23 +78,25 @@ export default function RomaneioDetail() {
   const [pesoManual, setPesoManual] = useState<number | ''>('')
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-
-  const sortedItens = [...itens].sort((a, b) => {
-    const aCarregado = a.carregado ? 1 : 0
-    const bCarregado = b.carregado ? 1 : 0
-    if (aCarregado !== bCarregado) return aCarregado - bCarregado
-    return new Date(a.created).getTime() - new Date(b.created).getTime()
-  })
+  const [editingObs, setEditingObs] = useState(false)
+  const [obsText, setObsText] = useState('')
 
   const loadData = async () => {
     if (!id) return
     try {
       const rom = await getRomaneio(id)
       setRomaneio(rom)
+      setObsText(rom.observacoes || '')
       const listItens = await getRomaneioItens(id)
       setItens(listItens)
       const listProds = await getProdutos()
       setProdutos(listProds)
+      try {
+        const config = await getConfiguracoes()
+        setConfigPhone(config?.telefone_whatsapp || '')
+      } catch {
+        /* no config yet */
+      }
     } catch {
       /* intentionally ignored */
     }
@@ -115,7 +126,7 @@ export default function RomaneioDetail() {
         description: isFinalizado ? 'Edições liberadas.' : 'Carga bloqueada para alterações.',
       })
       loadData()
-    } catch (_) {
+    } catch {
       toast({ title: 'Erro ao alterar status', variant: 'destructive' })
     }
   }
@@ -146,7 +157,7 @@ export default function RomaneioDetail() {
       setSelectedProdutoId('')
       setPesoManual('')
       loadData()
-    } catch (_) {
+    } catch {
       toast({ title: 'Erro ao adicionar item', variant: 'destructive' })
     }
   }
@@ -169,7 +180,6 @@ export default function RomaneioDetail() {
       )
       toast({
         title: !item.carregado ? 'Item marcado como carregado' : 'Item desmarcado',
-        description: !item.carregado ? 'Movido para o final da lista.' : undefined,
       })
     } catch {
       toast({ title: 'Erro ao atualizar item', variant: 'destructive' })
@@ -184,6 +194,45 @@ export default function RomaneioDetail() {
     } catch {
       /* intentionally ignored */
     }
+  }
+
+  const handleShareWhatsApp = () => {
+    const url = `${window.location.origin}/romaneios/${romaneio.id}`
+    const msg = `Olá! Segue o link do romaneio para conferência de carregamento:\n${url}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
+  const handleSendConclusion = () => {
+    const phone = configPhone.replace(/\D/g, '')
+    if (!phone) {
+      toast({
+        title: 'Telefone não cadastrado',
+        description: 'Cadastre um telefone de destino nas configurações.',
+        variant: 'destructive',
+      })
+      setConfigOpen(true)
+      return
+    }
+    const msg = `*Conclusão de Carregamento*\n\nRomaneio: #${romaneio.id.slice(-4).toUpperCase()}\nRota: ${romaneio.rota}\nData: ${new Date(romaneio.data).toLocaleDateString('pt-BR')}\nStatus: ${isFinalizado ? 'Finalizado' : 'Em Andamento'}\nTotal: ${totalPeso.toFixed(1)} kg\nProdutos: ${itens.length}`
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
+  const handleSaveObs = async () => {
+    try {
+      await updateRomaneio(romaneio.id, { observacoes: obsText })
+      toast({ title: 'Observações salvas!' })
+      setEditingObs(false)
+      loadData()
+    } catch {
+      toast({ title: 'Erro ao salvar observações', variant: 'destructive' })
+    }
+  }
+
+  const getItemQuantidade = (item: RomaneioItem): string => {
+    if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
+      return `${item.peso_total_kg.toFixed(1)} kg`
+    }
+    return formatBoxesAndPieces(item.caixas, item.pecas)
   }
 
   return (
@@ -236,8 +285,23 @@ export default function RomaneioDetail() {
                 >
                   <Plus className="w-4 h-4 mr-1" /> Item Manual
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleShareWhatsApp}
+                  className="rounded-xl font-semibold text-green-600 border-green-400 hover:bg-green-50"
+                >
+                  <Share2 className="w-4 h-4 mr-1" /> Compartilhar via WhatsApp
+                </Button>
               </>
             )}
+
+            <Button
+              variant="outline"
+              onClick={handleSendConclusion}
+              className="rounded-xl font-semibold text-blue-600 border-blue-400 hover:bg-blue-50"
+            >
+              <Send className="w-4 h-4 mr-1" /> Enviar conclusão via WhatsApp
+            </Button>
 
             <Button
               variant="outline"
@@ -262,6 +326,16 @@ export default function RomaneioDetail() {
                 <CheckCircle2 className="w-4 h-4 mr-1" />
               )}
               {isFinalizado ? 'Reabrir Carga' : 'Finalizar Carga'}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setConfigOpen(true)}
+              className="text-slate-400 hover:text-slate-700"
+              title="Configurar telefone"
+            >
+              <Settings className="w-4 h-4" />
             </Button>
 
             <Button
@@ -302,6 +376,59 @@ export default function RomaneioDetail() {
           </div>
         </div>
 
+        {/* Observations Section */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-base font-bold text-slate-800">Observações do Romaneio</h2>
+            {!editingObs ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setObsText(romaneio.observacoes || '')
+                  setEditingObs(true)
+                }}
+                className="text-slate-500 hover:text-slate-800"
+              >
+                Editar
+              </Button>
+            ) : (
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSaveObs}
+                  className="text-emerald-600"
+                >
+                  <Save className="w-3.5 h-3.5 mr-1" /> Salvar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingObs(false)}
+                  className="text-slate-400"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
+          {editingObs ? (
+            <Textarea
+              value={obsText}
+              onChange={(e) => setObsText(e.target.value)}
+              placeholder="Instruções do motorista, observações de temperatura, avarias..."
+              rows={3}
+            />
+          ) : (
+            <p
+              className={`text-sm ${romaneio.observacoes ? 'text-slate-600' : 'text-slate-300 italic'}`}
+            >
+              {romaneio.observacoes || 'Nenhuma observação registrada.'}
+            </p>
+          )}
+        </div>
+
         {/* Items Table */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -326,14 +453,12 @@ export default function RomaneioDetail() {
                   <TableHead>Descrição</TableHead>
                   <TableHead>Marca</TableHead>
                   <TableHead className="text-right">Peso Total (kg)</TableHead>
-                  <TableHead className="text-center">Caixas</TableHead>
-                  <TableHead className="text-center">Peças Avulsas</TableHead>
-                  <TableHead className="text-right">Conversão Final</TableHead>
+                  <TableHead className="text-right">Quantidade</TableHead>
                   {!isFinalizado && <TableHead className="text-right">Ação</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedItens.map((item) => (
+                {itens.map((item) => (
                   <TableRow key={item.id} className={item.carregado ? 'opacity-50' : ''}>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center">
@@ -362,28 +487,9 @@ export default function RomaneioDetail() {
                     <TableCell className="text-right font-medium tabular-nums">
                       {item.peso_total_kg.toFixed(1)} kg
                     </TableCell>
-                    {!item.expand?.produto?.peso_caixa_kg ||
-                    item.expand?.produto?.peso_caixa_kg <= 0 ? (
-                      <>
-                        <TableCell className="text-center text-slate-300">—</TableCell>
-                        <TableCell className="text-center text-slate-300">—</TableCell>
-                        <TableCell className="text-right font-black text-slate-900">
-                          {item.peso_total_kg.toFixed(1)} kg
-                        </TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell className="text-center font-bold text-orange-600 tabular-nums">
-                          {item.caixas} cx
-                        </TableCell>
-                        <TableCell className="text-center font-bold text-blue-600 tabular-nums">
-                          {item.pecas} pct
-                        </TableCell>
-                        <TableCell className="text-right font-black text-slate-900">
-                          {formatBoxesAndPieces(item.caixas, item.pecas)}
-                        </TableCell>
-                      </>
-                    )}
+                    <TableCell className="text-right font-black text-slate-900">
+                      {getItemQuantidade(item)}
+                    </TableCell>
                     {!isFinalizado && (
                       <TableCell className="text-right">
                         <Button
@@ -483,7 +589,13 @@ export default function RomaneioDetail() {
         </DialogContent>
       </Dialog>
 
-      <PrintManifest romaneio={romaneio} itens={sortedItens} />
+      <ConfigPhoneModal
+        open={configOpen}
+        onOpenChange={setConfigOpen}
+        onSuccess={() => loadData()}
+      />
+
+      <PrintManifest romaneio={romaneio} itens={itens} />
     </>
   )
 }
