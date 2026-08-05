@@ -130,28 +130,45 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
     try {
       for (const r of valid) {
         const num = (s: string) => parseFloat(s.replace(',', '.'))
-        const pc = r.peso_caixa_kg.trim() ? num(r.peso_caixa_kg) : 0
-        const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
-        let pecasPorCaixa = 0
-        if (r.pecas_por_caixa.trim()) {
-          pecasPorCaixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
-        } else if (pp > 0 && pc > 0) {
-          pecasPorCaixa = Math.round(pc / pp)
-        }
-        const data = {
-          codigo: r.codigo,
-          nome: r.nome,
-          secao: r.secao.trim() || undefined,
-          peso_caixa_kg: pc,
-          peso_peca_kg: pp,
-          pecas_por_caixa: pecasPorCaixa,
-        }
+
         if (r.status === 'atualizar' && r.existingId) {
           const ex = existing.find((p) => p.id === r.existingId)
-          await updateProduto(r.existingId, { ...data, ativo: ex?.ativo ?? true })
+          const updateData: Record<string, unknown> = { ativo: ex?.ativo ?? true }
+
+          if (mappings.codigo && r.codigo.trim()) updateData.codigo = r.codigo
+          if (mappings.nome && r.nome.trim()) updateData.nome = r.nome
+          if (mappings.secao && r.secao.trim()) updateData.secao = r.secao.trim()
+          if (mappings.peso_caixa_kg && r.peso_caixa_kg.trim()) {
+            updateData.peso_caixa_kg = num(r.peso_caixa_kg)
+          }
+          if (mappings.peso_peca_kg && r.peso_peca_kg.trim()) {
+            updateData.peso_peca_kg = num(r.peso_peca_kg)
+          }
+          if (mappings.pecas_por_caixa && r.pecas_por_caixa.trim()) {
+            updateData.pecas_por_caixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
+          }
+
+          await updateProduto(r.existingId, updateData)
           updated++
         } else {
-          await createProduto({ ...data, ativo: true })
+          const pc = r.peso_caixa_kg.trim() ? num(r.peso_caixa_kg) : 0
+          const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
+          let pecasPorCaixa = 0
+          if (r.pecas_por_caixa.trim()) {
+            pecasPorCaixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
+          } else if (pp > 0 && pc > 0) {
+            pecasPorCaixa = Math.round(pc / pp)
+          }
+          const data = {
+            codigo: r.codigo,
+            nome: r.nome,
+            secao: r.secao.trim() || undefined,
+            peso_caixa_kg: pc,
+            peso_peca_kg: pp,
+            pecas_por_caixa: pecasPorCaixa,
+            ativo: true,
+          }
+          await createProduto(data)
           created++
         }
       }
