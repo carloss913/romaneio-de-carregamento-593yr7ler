@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T01:34:34.481Z",
+  "generatedAt": "2026-08-05T01:47:33.553Z",
   "collections": [
     {
       "name": "users",
@@ -48,8 +48,8 @@
       "name": "produtos",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -128,10 +128,10 @@
       "name": "romaneios",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
+        "update": "",
         "delete": "@request.auth.id != ''"
       },
       "fields": [
@@ -192,10 +192,10 @@
       "name": "romaneio_itens",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
+        "update": "",
         "delete": "@request.auth.id != ''"
       },
       "fields": [
@@ -261,8 +261,8 @@
       "name": "configuracoes",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"

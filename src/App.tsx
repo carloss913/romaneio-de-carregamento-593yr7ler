@@ -22,6 +22,7 @@ const App = () => (
         <Sonner />
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/romaneios/:id" element={<RomaneioView />} />
 
           <Route
             element={
@@ -32,7 +33,7 @@ const App = () => (
           >
             <Route path="/" element={<Index />} />
             <Route path="/rotas/:rota" element={<RotaDetail />} />
-            <Route path="/romaneios/:id" element={<RomaneioDetail />} />
+            <Route path="/admin/romaneios/:id" element={<RomaneioDetail />} />
             <Route path="/produtos" element={<Produtos />} />
             <Route path="/contato" element={<Contato />} />
           </Route>
