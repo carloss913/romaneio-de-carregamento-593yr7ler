@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Plus, Search, Edit2, Trash2, CheckCircle2, XCircle, Upload } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Upload,
+  AlertCircle,
+} from 'lucide-react'
 import { Produto } from '@/types/database'
 import { getProdutos, updateProduto, deleteProduto } from '@/services/produtos'
 import pb from '@/lib/pocketbase/client'
@@ -18,6 +27,7 @@ import { ProdutoModal } from '@/components/ProdutoModal'
 import { ImportProdutosModal } from '@/components/ImportProdutosModal'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
+import { cn } from '@/lib/utils'
 
 export default function Produtos() {
   const { toast } = useToast()
@@ -26,6 +36,15 @@ export default function Produtos() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [showIncomplete, setShowIncomplete] = useState(false)
+
+  const isProdutoIncomplete = (p: Produto) =>
+    !p.peso_caixa_kg ||
+    p.peso_caixa_kg <= 0 ||
+    !p.pecas_por_caixa ||
+    p.pecas_por_caixa <= 0 ||
+    !p.peso_peca_kg ||
+    p.peso_peca_kg <= 0
 
   const loadData = async () => {
     try {
@@ -78,11 +97,22 @@ export default function Produtos() {
     }
   }
 
-  const filtered = produtos.filter(
-    (p) =>
-      p.nome.toLowerCase().includes(search.toLowerCase()) ||
-      (p.codigo || '').toLowerCase().includes(search.toLowerCase()),
-  )
+  const filtered = useMemo(() => {
+    const matched = produtos.filter(
+      (p) =>
+        p.nome.toLowerCase().includes(search.toLowerCase()) ||
+        (p.codigo || '').toLowerCase().includes(search.toLowerCase()),
+    )
+    if (showIncomplete) {
+      return [...matched].sort((a, b) => {
+        const aIncomplete = isProdutoIncomplete(a)
+        const bIncomplete = isProdutoIncomplete(b)
+        if (aIncomplete === bIncomplete) return 0
+        return aIncomplete ? -1 : 1
+      })
+    }
+    return matched
+  }, [produtos, search, showIncomplete])
 
   return (
     <div className="space-y-6">
@@ -118,14 +148,29 @@ export default function Produtos() {
       </div>
 
       {/* Search Bar */}
-      <div className="relative max-w-md">
-        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por código ou nome..."
-          className="pl-9 bg-white rounded-xl border-slate-200"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative max-w-md flex-1">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por código ou nome..."
+            className="pl-9 bg-white rounded-xl border-slate-200"
+          />
+        </div>
+        <Button
+          variant={showIncomplete ? 'default' : 'outline'}
+          onClick={() => setShowIncomplete((v) => !v)}
+          className={cn(
+            'font-bold rounded-xl whitespace-nowrap',
+            showIncomplete
+              ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500'
+              : 'border-slate-300 text-slate-700 hover:bg-slate-50',
+          )}
+        >
+          <AlertCircle className="w-4 h-4 mr-2" />
+          {showIncomplete ? 'Filtrando Incompletos' : 'Sem conversão de peso'}
+        </Button>
       </div>
 
       {/* Grid / Table */}
@@ -152,20 +197,26 @@ export default function Produtos() {
               </TableRow>
             ) : (
               filtered.map((p) => (
-                <TableRow key={p.id} className={!p.ativo ? 'opacity-50 bg-slate-50' : ''}>
+                <TableRow
+                  key={p.id}
+                  className={cn(
+                    !p.ativo && 'opacity-50 bg-slate-50',
+                    showIncomplete && isProdutoIncomplete(p) && 'bg-amber-50/60',
+                  )}
+                >
                   <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
                     {p.codigo || '-'}
                   </TableCell>
                   <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
                   <TableCell className="text-slate-600 text-sm">{p.marca || '-'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {p.peso_caixa_kg.toFixed(1)} kg
+                    {p.peso_caixa_kg ? p.peso_caixa_kg.toFixed(1) + ' kg' : '-'}
                   </TableCell>
                   <TableCell className="text-center font-semibold tabular-nums">
-                    {p.pecas_por_caixa}
+                    {p.pecas_por_caixa || '-'}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums text-slate-600">
-                    {p.peso_peca_kg.toFixed(2)} kg
+                    {p.peso_peca_kg ? p.peso_peca_kg.toFixed(2) + ' kg' : '-'}
                   </TableCell>
                   <TableCell className="text-center">
                     {p.ativo ? (

@@ -126,7 +126,7 @@ export function ImportWizardModal({
       setColProduto(data.headers[0] || '')
       setColPeso(data.headers[16] || data.headers[1] || '')
       setColMarca(data.headers[10] || '')
-      setColNome(data.headers[1] || data.headers[2] || '')
+      setColNome(data.headers[3] || data.headers[1] || '')
       setStep(2)
     } catch (err) {
       toast({
