@@ -362,15 +362,28 @@ export default function RomaneioDetail() {
                     <TableCell className="text-right font-medium tabular-nums">
                       {item.peso_total_kg.toFixed(1)} kg
                     </TableCell>
-                    <TableCell className="text-center font-bold text-orange-600 tabular-nums">
-                      {item.caixas} cx
-                    </TableCell>
-                    <TableCell className="text-center font-bold text-blue-600 tabular-nums">
-                      {item.pecas} pct
-                    </TableCell>
-                    <TableCell className="text-right font-black text-slate-900">
-                      {formatBoxesAndPieces(item.caixas, item.pecas)}
-                    </TableCell>
+                    {!item.expand?.produto?.peso_caixa_kg ||
+                    item.expand?.produto?.peso_caixa_kg <= 0 ? (
+                      <>
+                        <TableCell className="text-center text-slate-300">—</TableCell>
+                        <TableCell className="text-center text-slate-300">—</TableCell>
+                        <TableCell className="text-right font-black text-slate-900">
+                          {item.peso_total_kg.toFixed(1)} kg
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="text-center font-bold text-orange-600 tabular-nums">
+                          {item.caixas} cx
+                        </TableCell>
+                        <TableCell className="text-center font-bold text-blue-600 tabular-nums">
+                          {item.pecas} pct
+                        </TableCell>
+                        <TableCell className="text-right font-black text-slate-900">
+                          {formatBoxesAndPieces(item.caixas, item.pecas)}
+                        </TableCell>
+                      </>
+                    )}
                     {!isFinalizado && (
                       <TableCell className="text-right">
                         <Button
