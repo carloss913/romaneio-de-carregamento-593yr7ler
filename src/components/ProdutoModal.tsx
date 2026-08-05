@@ -163,7 +163,7 @@ export function ProdutoModal({
               <Input
                 id="pecasPorCaixa"
                 type="number"
-                step="1"
+                step="0.01"
                 value={pecasPorCaixa}
                 onChange={(e) => {
                   const val = e.target.value === '' ? '' : Number(e.target.value)

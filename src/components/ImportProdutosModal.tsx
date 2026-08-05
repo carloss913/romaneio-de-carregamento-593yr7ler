@@ -133,7 +133,7 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
         const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
         let pecasPorCaixa = 0
         if (r.pecas_por_caixa.trim()) {
-          pecasPorCaixa = parseInt(r.pecas_por_caixa) || 0
+          pecasPorCaixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
         } else if (pp > 0 && pc > 0) {
           pecasPorCaixa = Math.round(pc / pp)
         }
