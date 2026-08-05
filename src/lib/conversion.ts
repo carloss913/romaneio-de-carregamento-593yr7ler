@@ -6,17 +6,17 @@ export interface ConversionResult {
   weightWarningMessage?: string
 }
 
-export function hasPecaData(pesoPecaKg: number, pecasPorCaixa: number): boolean {
-  return pesoPecaKg > 0 && pecasPorCaixa > 0
+export function hasPecaData(pesoPecaKg?: number, pecasPorCaixa?: number): boolean {
+  return (pesoPecaKg ?? 0) > 0 && (pecasPorCaixa ?? 0) > 0
 }
 
 export function convertWeightToBoxesAndPieces(
   pesoTotalKg: number,
-  pesoCaixaKg: number,
-  pesoPecaKg: number,
+  pesoCaixaKg?: number,
+  pesoPecaKg?: number,
   pecasPorCaixa?: number,
 ): ConversionResult {
-  if (pesoTotalKg <= 0 || pesoCaixaKg <= 0) {
+  if (pesoTotalKg <= 0) {
     return {
       caixas: 0,
       pecas: 0,
@@ -26,18 +26,28 @@ export function convertWeightToBoxesAndPieces(
     }
   }
 
-  const caixas = Math.floor(pesoTotalKg / pesoCaixaKg)
-  const restoKg = pesoTotalKg - caixas * pesoCaixaKg
+  const pc = pesoCaixaKg ?? 0
+  if (pc <= 0) {
+    return {
+      caixas: 0,
+      pecas: 0,
+      textoFormatado: '0 cx',
+      weightWarning: false,
+    }
+  }
 
-  if (!hasPecaData(pesoPecaKg, pecasPorCaixa ?? 0)) {
-    const tolerance = Math.max(pesoCaixaKg * 0.1, 0.5)
+  const caixas = Math.floor(pesoTotalKg / pc)
+  const restoKg = pesoTotalKg - caixas * pc
+
+  if (!hasPecaData(pesoPecaKg, pecasPorCaixa)) {
+    const tolerance = Math.max(pc * 0.1, 0.5)
     if (Math.abs(restoKg) > tolerance) {
       return {
         caixas,
         pecas: 0,
         textoFormatado: formatBoxesAndPieces(caixas, 0),
         weightWarning: true,
-        weightWarningMessage: `Peso não é múltiplo de ${pesoCaixaKg}kg (resto: ${restoKg.toFixed(2)}kg).`,
+        weightWarningMessage: `Peso não é múltiplo de ${pc}kg (resto: ${restoKg.toFixed(2)}kg).`,
       }
     }
     return {
@@ -48,10 +58,11 @@ export function convertWeightToBoxesAndPieces(
     }
   }
 
-  const pecas = Math.round(restoKg / pesoPecaKg)
-  const reconstructedWeight = caixas * pesoCaixaKg + pecas * pesoPecaKg
+  const pp = pesoPecaKg ?? 0
+  const pecas = Math.round(restoKg / pp)
+  const reconstructedWeight = caixas * pc + pecas * pp
   const diff = Math.abs(pesoTotalKg - reconstructedWeight)
-  const tolerance = Math.max(pesoPecaKg * 0.1, 0.05)
+  const tolerance = Math.max(pp * 0.1, 0.05)
 
   if (diff > tolerance) {
     return {

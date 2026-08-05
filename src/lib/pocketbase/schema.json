@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-04T23:41:30.544Z",
+  "generatedAt": "2026-08-05T00:09:54.195Z",
   "collections": [
     {
       "name": "users",
@@ -64,7 +64,7 @@
         {
           "name": "peso_caixa_kg",
           "type": "number",
-          "required": true,
+          "required": false,
           "system": false
         },
         {

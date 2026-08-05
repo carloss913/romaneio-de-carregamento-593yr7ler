@@ -34,25 +34,25 @@ export function ProdutoModal({
   const [loading, setLoading] = useState(false)
   const [codigo, setCodigo] = useState('')
   const [nome, setNome] = useState('')
-  const [pesoCaixa, setPesoCaixa] = useState<number | ''>(20)
-  const [pecasPorCaixa, setPecasPorCaixa] = useState<number | ''>(4)
-  const [pesoPeca, setPesoPeca] = useState<number | ''>(5)
+  const [pesoCaixa, setPesoCaixa] = useState<number | ''>('')
+  const [pecasPorCaixa, setPecasPorCaixa] = useState<number | ''>('')
+  const [pesoPeca, setPesoPeca] = useState<number | ''>('')
   const [ativo, setAtivo] = useState(true)
 
   useEffect(() => {
     if (produto) {
       setCodigo(produto.codigo || '')
       setNome(produto.nome)
-      setPesoCaixa(produto.peso_caixa_kg)
-      setPecasPorCaixa(produto.pecas_por_caixa)
-      setPesoPeca(produto.peso_peca_kg)
+      setPesoCaixa(produto.peso_caixa_kg || '')
+      setPecasPorCaixa(produto.pecas_por_caixa || '')
+      setPesoPeca(produto.peso_peca_kg || '')
       setAtivo(produto.ativo)
     } else {
       setCodigo('')
       setNome(initialName || '')
-      setPesoCaixa(20)
-      setPecasPorCaixa(4)
-      setPesoPeca(5)
+      setPesoCaixa('')
+      setPecasPorCaixa('')
+      setPesoPeca('')
       setAtivo(true)
     }
   }, [produto, initialName, open])
@@ -75,22 +75,6 @@ export function ProdutoModal({
       })
       return
     }
-    if (
-      !pesoCaixa ||
-      pesoCaixa <= 0 ||
-      !pecasPorCaixa ||
-      pecasPorCaixa <= 0 ||
-      !pesoPeca ||
-      pesoPeca <= 0
-    ) {
-      toast({
-        title: 'Valores inválidos',
-        description: 'Preencha valores numéricos positivos para peso e peças.',
-        variant: 'destructive',
-      })
-      return
-    }
-
     setLoading(true)
     try {
       let saved: Produto
@@ -98,9 +82,9 @@ export function ProdutoModal({
         saved = await updateProduto(produto.id, {
           codigo: codigo.trim(),
           nome: nome.trim(),
-          peso_caixa_kg: Number(pesoCaixa),
-          pecas_por_caixa: Number(pecasPorCaixa),
-          peso_peca_kg: Number(pesoPeca),
+          peso_caixa_kg: pesoCaixa === '' ? 0 : Number(pesoCaixa),
+          pecas_por_caixa: pecasPorCaixa === '' ? 0 : Number(pecasPorCaixa),
+          peso_peca_kg: pesoPeca === '' ? 0 : Number(pesoPeca),
           ativo,
         })
         toast({ title: 'Produto atualizado!', description: `${saved.nome} foi salvo com sucesso.` })
@@ -108,9 +92,9 @@ export function ProdutoModal({
         saved = await createProduto({
           codigo: codigo.trim(),
           nome: nome.trim(),
-          peso_caixa_kg: Number(pesoCaixa),
-          pecas_por_caixa: Number(pecasPorCaixa),
-          peso_peca_kg: Number(pesoPeca),
+          peso_caixa_kg: pesoCaixa === '' ? 0 : Number(pesoCaixa),
+          pecas_por_caixa: pecasPorCaixa === '' ? 0 : Number(pecasPorCaixa),
+          peso_peca_kg: pesoPeca === '' ? 0 : Number(pesoPeca),
           ativo,
         })
         toast({ title: 'Produto criado!', description: `${saved.nome} adicionado ao catálogo.` })
@@ -165,14 +149,12 @@ export function ProdutoModal({
                 id="pesoCaixa"
                 type="number"
                 step="0.1"
-                min="0.1"
                 value={pesoCaixa}
                 onChange={(e) => {
                   const val = e.target.value === '' ? '' : Number(e.target.value)
                   setPesoCaixa(val)
                   handleCaixaOrPecasChange(val, pecasPorCaixa)
                 }}
-                required
               />
             </div>
 
@@ -182,30 +164,26 @@ export function ProdutoModal({
                 id="pecasPorCaixa"
                 type="number"
                 step="1"
-                min="1"
                 value={pecasPorCaixa}
                 onChange={(e) => {
                   const val = e.target.value === '' ? '' : Number(e.target.value)
                   setPecasPorCaixa(val)
                   handleCaixaOrPecasChange(pesoCaixa, val)
                 }}
-                required
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="pesoPeca">
-              Peso da Peça (kg) <span className="text-xs text-slate-400">(calculado)</span>
+              Peso da Peça (kg) <span className="text-xs text-slate-400">(opcional)</span>
             </Label>
             <Input
               id="pesoPeca"
               type="number"
               step="0.01"
-              min="0.01"
               value={pesoPeca}
               onChange={(e) => setPesoPeca(e.target.value === '' ? '' : Number(e.target.value))}
-              required
             />
           </div>
 

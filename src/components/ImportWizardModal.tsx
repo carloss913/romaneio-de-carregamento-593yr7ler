@@ -117,10 +117,8 @@ export function ImportWizardModal({
     try {
       const data = await parseExcelOrCsvFile(uploadedFile)
       setParsedData(data)
-      if (data.headers.length >= 2) {
-        setColProduto(data.headers[0])
-        setColPeso(data.headers[1])
-      }
+      setColProduto(data.headers[0] || '')
+      setColPeso(data.headers[16] || data.headers[1] || '')
       setStep(2)
     } catch (err) {
       toast({
@@ -134,6 +132,17 @@ export function ImportWizardModal({
   }
 
   const applyConversion = (row: ProcessedRow, produto: Produto, pesoKg: number): ProcessedRow => {
+    if (!produto.peso_caixa_kg || produto.peso_caixa_kg <= 0) {
+      return {
+        ...row,
+        matchedProduto: produto,
+        matchStatus: 'ok',
+        weightWarning: false,
+        caixas: 0,
+        pecas: 0,
+        textoFormatado: '0 cx',
+      }
+    }
     const conv = convertWeightToBoxesAndPieces(
       pesoKg,
       produto.peso_caixa_kg,

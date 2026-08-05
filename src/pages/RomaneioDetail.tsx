@@ -396,7 +396,8 @@ export default function RomaneioDetail() {
                     .filter((p) => p.ativo)
                     .map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.nome} (Caixa {p.peso_caixa_kg}kg)
+                        {p.nome}
+                        {p.peso_caixa_kg ? ` (Caixa ${p.peso_caixa_kg}kg)` : ''}
                       </SelectItem>
                     ))}
                 </SelectContent>

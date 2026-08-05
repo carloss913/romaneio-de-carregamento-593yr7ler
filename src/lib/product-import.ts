@@ -6,7 +6,7 @@ export type ProductField = 'codigo' | 'nome' | 'peso_caixa_kg' | 'peso_peca_kg' 
 export const PRODUCT_FIELDS: { key: ProductField; label: string; required: boolean }[] = [
   { key: 'codigo', label: 'Código', required: true },
   { key: 'nome', label: 'Nome', required: true },
-  { key: 'peso_caixa_kg', label: 'Peso da Caixa (kg)', required: true },
+  { key: 'peso_caixa_kg', label: 'Peso da Caixa (kg)', required: false },
   { key: 'peso_peca_kg', label: 'Peso da Peça (kg)', required: false },
   { key: 'pecas_por_caixa', label: 'Peças por Caixa', required: false },
 ]
@@ -118,8 +118,6 @@ export function validateRows(rows: ProductRow[]): ProductRow[] {
     if (!r.nome.trim()) errors.nome = 'Nome obrigatório'
     else if ((nomeCount.get(n) || 0) > 1) errors.nome = 'Nome duplicado no arquivo'
 
-    if (!r.peso_caixa_kg.trim() || isNaN(toNum(r.peso_caixa_kg)) || toNum(r.peso_caixa_kg) <= 0)
-      errors.peso_caixa_kg = 'Peso inválido'
     return { ...r, errors }
   })
 }

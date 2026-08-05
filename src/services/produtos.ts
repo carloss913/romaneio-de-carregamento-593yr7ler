@@ -8,9 +8,9 @@ export const getProduto = (id: string) => pb.collection('produtos').getOne<Produ
 export const createProduto = (data: {
   codigo?: string
   nome: string
-  peso_caixa_kg: number
-  pecas_por_caixa: number
-  peso_peca_kg: number
+  peso_caixa_kg?: number
+  pecas_por_caixa?: number
+  peso_peca_kg?: number
   ativo?: boolean
 }) => pb.collection('produtos').create<Produto>(data)
 

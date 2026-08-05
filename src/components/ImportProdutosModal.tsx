@@ -129,7 +129,7 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
     try {
       for (const r of valid) {
         const num = (s: string) => parseFloat(s.replace(',', '.'))
-        const pc = num(r.peso_caixa_kg)
+        const pc = r.peso_caixa_kg.trim() ? num(r.peso_caixa_kg) : 0
         const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
         let pecasPorCaixa = 0
         if (r.pecas_por_caixa.trim()) {
