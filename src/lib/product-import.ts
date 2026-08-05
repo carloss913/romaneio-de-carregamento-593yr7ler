@@ -1,11 +1,18 @@
 import { Produto } from '@/types/database'
 import type { ParsedSheetData } from './excel-parser'
 
-export type ProductField = 'codigo' | 'nome' | 'peso_caixa_kg' | 'peso_peca_kg' | 'pecas_por_caixa'
+export type ProductField =
+  | 'codigo'
+  | 'nome'
+  | 'secao'
+  | 'peso_caixa_kg'
+  | 'peso_peca_kg'
+  | 'pecas_por_caixa'
 
 export const PRODUCT_FIELDS: { key: ProductField; label: string; required: boolean }[] = [
   { key: 'codigo', label: 'Código', required: true },
   { key: 'nome', label: 'Nome', required: true },
+  { key: 'secao', label: 'Seção', required: false },
   { key: 'peso_caixa_kg', label: 'Peso da Caixa (kg)', required: false },
   { key: 'peso_peca_kg', label: 'Peso da Peça (kg)', required: false },
   { key: 'pecas_por_caixa', label: 'Peças por Caixa', required: false },
@@ -14,6 +21,7 @@ export const PRODUCT_FIELDS: { key: ProductField; label: string; required: boole
 const SUGGESTIONS: [RegExp, ProductField][] = [
   [/id_produto/i, 'codigo'],
   [/cod/i, 'codigo'],
+  [/se[çc][ãa]o/i, 'secao'],
   [/descri/i, 'nome'],
   [/nome/i, 'nome'],
   [/produto/i, 'nome'],
@@ -26,6 +34,7 @@ export function autoSuggestMappings(headers: string[]): Record<ProductField, str
   const mapping: Record<ProductField, string> = {
     codigo: '',
     nome: '',
+    secao: '',
     peso_caixa_kg: '',
     peso_peca_kg: '',
     pecas_por_caixa: '',
@@ -47,6 +56,7 @@ export interface ProductRow {
   id: string
   codigo: string
   nome: string
+  secao: string
   peso_caixa_kg: string
   peso_peca_kg: string
   pecas_por_caixa: string
@@ -72,6 +82,7 @@ export function processRows(
   return data.rows.map((row, idx) => {
     const codigo = mapping.codigo ? (row[mapping.codigo] || '').trim() : ''
     const nome = mapping.nome ? (row[mapping.nome] || '').trim() : ''
+    const secao = mapping.secao ? (row[mapping.secao] || '').trim() : ''
     const pesoCaixa = mapping.peso_caixa_kg ? (row[mapping.peso_caixa_kg] || '').trim() : ''
     const pesoPeca = mapping.peso_peca_kg ? (row[mapping.peso_peca_kg] || '').trim() : ''
     let pecas = mapping.pecas_por_caixa ? (row[mapping.pecas_por_caixa] || '').trim() : ''
@@ -87,6 +98,7 @@ export function processRows(
       id: `row-${idx}`,
       codigo,
       nome,
+      secao,
       peso_caixa_kg: pesoCaixa,
       peso_peca_kg: pesoPeca,
       pecas_por_caixa: pecas,

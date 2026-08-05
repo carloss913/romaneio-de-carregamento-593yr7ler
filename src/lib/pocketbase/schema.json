@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T01:17:25.953Z",
+  "generatedAt": "2026-08-05T01:29:12.223Z",
   "collections": [
     {
       "name": "users",
@@ -110,6 +110,13 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "secao",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["CONGELADO", "GERAL", "RESFRIADO"]
         }
       ],
       "indexes": [
@@ -286,6 +293,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "telefone_contato",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "nome_contato",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": []

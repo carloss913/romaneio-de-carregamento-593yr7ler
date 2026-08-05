@@ -69,6 +69,7 @@ interface ProcessedRow {
   pecas: number
   textoFormatado: string
   marca?: string
+  secao?: string
 }
 
 export function ImportWizardModal({
@@ -87,6 +88,7 @@ export function ImportWizardModal({
   const [colPeso, setColPeso] = useState<string>('')
   const [colMarca, setColMarca] = useState<string>('')
   const [colNome, setColNome] = useState<string>('')
+  const [colSecao, setColSecao] = useState<string>('')
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([])
   const [substituir, setSubstituir] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -110,6 +112,7 @@ export function ImportWizardModal({
     setColPeso('')
     setColMarca('')
     setColNome('')
+    setColSecao('')
     setProcessedRows([])
     setSubstituir(false)
     setWeightAcknowledged(false)
@@ -127,6 +130,7 @@ export function ImportWizardModal({
       setColPeso(data.headers[16] || data.headers[1] || '')
       setColMarca(data.headers[10] || '')
       setColNome(data.headers[3] || data.headers[1] || '')
+      setColSecao(data.headers.find((h: string) => /se[çc][ãa]o/i.test(h)) || '')
       setStep(2)
     } catch (err) {
       toast({
@@ -173,7 +177,7 @@ export function ImportWizardModal({
     if (!parsedData || !colProduto || !colPeso) return
     const aggregated: Record<
       string,
-      { rawCode: string; pesoTotal: number; marca: string; nome: string }
+      { rawCode: string; pesoTotal: number; marca: string; nome: string; secao: string }
     > = {}
 
     parsedData.rows.forEach((row) => {
@@ -183,6 +187,7 @@ export function ImportWizardModal({
       const weight = parseBrazilianWeight(weightRaw)
       const marcaVal = colMarca ? (row[colMarca] || '').trim() : ''
       const nomeVal = colNome ? (row[colNome] || '').trim() : ''
+      const secaoVal = colSecao ? (row[colSecao] || '').trim() : ''
       if (aggregated[code]) {
         aggregated[code].pesoTotal += weight
         if (marcaVal && !aggregated[code].marca) {
@@ -191,8 +196,17 @@ export function ImportWizardModal({
         if (nomeVal && !aggregated[code].nome) {
           aggregated[code].nome = nomeVal
         }
+        if (secaoVal && !aggregated[code].secao) {
+          aggregated[code].secao = secaoVal
+        }
       } else {
-        aggregated[code] = { rawCode: code, pesoTotal: weight, marca: marcaVal, nome: nomeVal }
+        aggregated[code] = {
+          rawCode: code,
+          pesoTotal: weight,
+          marca: marcaVal,
+          nome: nomeVal,
+          secao: secaoVal,
+        }
       }
     })
 
@@ -207,6 +221,7 @@ export function ImportWizardModal({
           pesoKg,
           nomeFromSheet: item.nome || item.rawCode,
           marca: item.marca,
+          secao: item.secao,
           matchStatus: pesoKg <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
           weightWarning: false,
           caixas: 0,
@@ -220,6 +235,7 @@ export function ImportWizardModal({
         rawCode: item.rawCode,
         pesoKg,
         marca: item.marca,
+        secao: item.secao,
         matchStatus: 'ok' as const,
         weightWarning: false,
         caixas: 0,
@@ -310,8 +326,15 @@ export function ImportWizardModal({
 
       for (const row of valid) {
         if (!row.matchedProduto) continue
+        const updates: Record<string, string> = {}
         if (row.marca && row.matchedProduto.marca !== row.marca) {
-          await updateProduto(row.matchedProduto.id, { marca: row.marca }).catch(() => {})
+          updates.marca = row.marca
+        }
+        if (row.secao && row.matchedProduto.secao !== row.secao) {
+          updates.secao = row.secao
+        }
+        if (Object.keys(updates).length > 0) {
+          await updateProduto(row.matchedProduto.id, updates).catch(() => {})
         }
         await createRomaneioItem({
           romaneio: romaneioId,
@@ -330,6 +353,7 @@ export function ImportWizardModal({
           codigo: row.rawCode,
           nome: row.nomeFromSheet || row.rawCode,
           marca: row.marca || '',
+          secao: row.secao || undefined,
           ativo: true,
         })
         await createRomaneioItem({
@@ -483,6 +507,21 @@ export function ImportWizardModal({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
+                    <Label>Coluna da Seção</Label>
+                    <Select value={colSecao} onValueChange={setColSecao}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {parsedData.headers.map((h) => (
+                          <SelectItem key={h} value={h}>
+                            {h}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
                     <Label>Coluna do Peso (kg)</Label>
                     <Select value={colPeso} onValueChange={setColPeso}>
                       <SelectTrigger>
@@ -500,7 +539,7 @@ export function ImportWizardModal({
                 </div>
                 <div className="border rounded-lg p-3 bg-slate-50">
                   <p className="text-xs font-semibold text-slate-500 mb-2">
-                    Pré-visualização (Código | Descrição | Marca | Peso):
+                    Pré-visualização (Código | Descrição | Marca | Seção | Peso):
                   </p>
                   <div className="space-y-1 text-xs">
                     {parsedData.rows.slice(0, 3).map((r, i) => (
@@ -514,6 +553,9 @@ export function ImportWizardModal({
                         </span>
                         <span className="text-slate-500 flex-1 text-center">
                           {colMarca ? r[colMarca] || '-' : '-'}
+                        </span>
+                        <span className="text-slate-500 flex-1 text-center">
+                          {colSecao ? r[colSecao] || '-' : '-'}
                         </span>
                         <span className="text-slate-500">{r[colPeso] || '-'}</span>
                       </div>

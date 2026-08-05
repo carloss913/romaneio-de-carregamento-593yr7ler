@@ -6,6 +6,7 @@ export interface Produto extends RecordModel {
   codigo: string
   nome: string
   marca?: string
+  secao?: 'CONGELADO' | 'GERAL' | 'RESFRIADO'
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number
@@ -36,6 +37,18 @@ export interface RomaneioItem extends RecordModel {
 export interface Configuracoes extends RecordModel {
   telefone_whatsapp: string
   nome_destinatario: string
+  telefone_contato?: string
+  nome_contato?: string
+}
+
+export const SECAO_ORDER: Record<string, number> = {
+  CONGELADO: 0,
+  GERAL: 1,
+  RESFRIADO: 2,
+}
+
+export function getSecaoOrder(secao?: string): number {
+  return SECAO_ORDER[secao || ''] ?? 99
 }
 
 export const ROTAS: { name: RotaType; color: string; bg: string; border: string; text: string }[] =

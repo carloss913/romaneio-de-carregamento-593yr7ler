@@ -10,6 +10,7 @@ import Index from './pages/Index'
 import RotaDetail from './pages/RotaDetail'
 import RomaneioDetail from './pages/RomaneioDetail'
 import Produtos from './pages/Produtos'
+import Contato from './pages/Contato'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/rotas/:rota" element={<RotaDetail />} />
             <Route path="/romaneios/:id" element={<RomaneioDetail />} />
             <Route path="/produtos" element={<Produtos />} />
+            <Route path="/contato" element={<Contato />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

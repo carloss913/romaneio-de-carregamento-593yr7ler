@@ -13,8 +13,10 @@ export const getConfiguracoes = async (): Promise<Configuracoes | null> => {
 }
 
 export const saveConfiguracoes = (data: {
-  telefone_whatsapp: string
+  telefone_whatsapp?: string
   nome_destinatario?: string
+  telefone_contato?: string
+  nome_contato?: string
 }) =>
   getConfiguracoes().then((existing) => {
     if (existing) {

@@ -9,6 +9,7 @@ export const createProduto = (data: {
   codigo?: string
   nome: string
   marca?: string
+  secao?: string
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number
@@ -21,6 +22,7 @@ export const updateProduto = (
     codigo: string
     nome: string
     marca: string
+    secao: string
     peso_caixa_kg: number
     pecas_por_caixa: number
     peso_peca_kg: number

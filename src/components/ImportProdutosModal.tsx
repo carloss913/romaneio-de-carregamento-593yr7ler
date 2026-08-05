@@ -49,6 +49,7 @@ interface Props {
 const EMPTY_MAP: Record<ProductField, string> = {
   codigo: '',
   nome: '',
+  secao: '',
   peso_caixa_kg: '',
   peso_peca_kg: '',
   pecas_por_caixa: '',
@@ -140,6 +141,7 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
         const data = {
           codigo: r.codigo,
           nome: r.nome,
+          secao: r.secao.trim() || undefined,
           peso_caixa_kg: pc,
           peso_peca_kg: pp,
           pecas_por_caixa: pecasPorCaixa,
@@ -296,6 +298,7 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
                     <TableRow>
                       <TableHead>Código</TableHead>
                       <TableHead>Nome</TableHead>
+                      <TableHead>Seção</TableHead>
                       <TableHead>Peso Caixa</TableHead>
                       <TableHead>Peças/Cx</TableHead>
                       <TableHead>Peso Peça</TableHead>
@@ -327,6 +330,14 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
                           {r.errors.nome && (
                             <span className="text-[10px] text-red-500 block">{r.errors.nome}</span>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={r.secao}
+                            onChange={(e) => updateRow(r.id, 'secao', e.target.value)}
+                            className="h-7 w-24 text-xs"
+                            placeholder="-"
+                          />
                         </TableCell>
                         <TableCell>
                           <Input

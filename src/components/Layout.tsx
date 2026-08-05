@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { Truck, Home, Package, Menu, X, LogOut, ChevronRight, Plus } from 'lucide-react'
+import { Truck, Home, Package, Menu, X, LogOut, ChevronRight, Plus, Phone } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { ROTAS } from '@/types/database'
 import { Button } from '@/components/ui/button'
@@ -71,6 +71,19 @@ export default function Layout() {
           >
             <Package className="w-4 h-4" />
             <span>Produtos</span>
+          </Link>
+
+          <Link
+            to="/contato"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              location.pathname === '/contato'
+                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Phone className="w-4 h-4" />
+            <span>Contato</span>
           </Link>
         </div>
 

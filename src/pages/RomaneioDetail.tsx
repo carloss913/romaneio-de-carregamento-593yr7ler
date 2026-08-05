@@ -15,7 +15,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { Romaneio, RomaneioItem, Produto } from '@/types/database'
+import { Romaneio, RomaneioItem, Produto, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
 import {
   getRomaneioItens,
@@ -70,6 +70,7 @@ export default function RomaneioDetail() {
   const [itens, setItens] = useState<RomaneioItem[]>([])
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [configPhone, setConfigPhone] = useState('')
+  const [configContato, setConfigContato] = useState('')
   const [configOpen, setConfigOpen] = useState(false)
 
   const [importWizardOpen, setImportWizardOpen] = useState(false)
@@ -94,6 +95,7 @@ export default function RomaneioDetail() {
       try {
         const config = await getConfiguracoes()
         setConfigPhone(config?.telefone_whatsapp || '')
+        setConfigContato(config?.telefone_contato || '')
       } catch {
         /* no config yet */
       }
@@ -112,6 +114,12 @@ export default function RomaneioDetail() {
   if (!romaneio) return null
 
   const isFinalizado = romaneio.status === 'finalizado'
+
+  const sortedItens = [...itens].sort((a, b) => {
+    const sa = getSecaoOrder(a.expand?.produto?.secao)
+    const sb = getSecaoOrder(b.expand?.produto?.secao)
+    return sa - sb
+  })
 
   const totalPeso = itens.reduce((a, b) => a + b.peso_total_kg, 0)
   const totalCaixas = itens.reduce((a, b) => a + b.caixas, 0)
@@ -203,14 +211,13 @@ export default function RomaneioDetail() {
   }
 
   const handleSendConclusion = () => {
-    const phone = configPhone.replace(/\D/g, '')
+    const phone = configContato.replace(/\D/g, '')
     if (!phone) {
       toast({
-        title: 'Telefone não cadastrado',
-        description: 'Cadastre um telefone de destino nas configurações.',
+        title: 'Contato não cadastrado',
+        description: 'Cadastre um telefone de contato na página Contato.',
         variant: 'destructive',
       })
-      setConfigOpen(true)
       return
     }
     const msg = `*Conclusão de Carregamento*\n\nRomaneio: #${romaneio.id.slice(-4).toUpperCase()}\nRota: ${romaneio.rota}\nData: ${new Date(romaneio.data).toLocaleDateString('pt-BR')}\nStatus: ${isFinalizado ? 'Finalizado' : 'Em Andamento'}\nTotal: ${totalPeso.toFixed(1)} kg\nProdutos: ${itens.length}`
@@ -458,7 +465,7 @@ export default function RomaneioDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {itens.map((item) => (
+                {sortedItens.map((item) => (
                   <TableRow key={item.id} className={item.carregado ? 'opacity-50' : ''}>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center">
@@ -595,7 +602,7 @@ export default function RomaneioDetail() {
         onSuccess={() => loadData()}
       />
 
-      <PrintManifest romaneio={romaneio} itens={itens} />
+      <PrintManifest romaneio={romaneio} itens={sortedItens} />
     </>
   )
 }
