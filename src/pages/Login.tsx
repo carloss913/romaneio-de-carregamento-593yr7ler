@@ -21,8 +21,8 @@ export default function Login() {
   const { signIn } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [email, setEmail] = useState('carlosaugusto913@hotmail.com')
-  const [password, setPassword] = useState('Skip@Pass')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
