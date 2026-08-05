@@ -13,7 +13,12 @@ import {
 } from 'lucide-react'
 import { Romaneio, RomaneioItem, Produto } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
-import { getRomaneioItens, createRomaneioItem, deleteRomaneioItem } from '@/services/romaneio_itens'
+import {
+  getRomaneioItens,
+  createRomaneioItem,
+  updateRomaneioItem,
+  deleteRomaneioItem,
+} from '@/services/romaneio_itens'
 import { getProdutos } from '@/services/produtos'
 import { convertWeightToBoxesAndPieces, formatBoxesAndPieces } from '@/lib/conversion'
 import { RouteBadge } from '@/components/RouteBadge'
@@ -317,7 +322,9 @@ export default function RomaneioDetail() {
               <TableHeader className="bg-slate-50">
                 <TableRow>
                   <TableHead className="w-12 text-center">Carregado</TableHead>
-                  <TableHead>Produto</TableHead>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Marca</TableHead>
                   <TableHead className="text-right">Peso Total (kg)</TableHead>
                   <TableHead className="text-center">Caixas</TableHead>
                   <TableHead className="text-center">Peças Avulsas</TableHead>
@@ -339,12 +346,18 @@ export default function RomaneioDetail() {
                         />
                       </div>
                     </TableCell>
+                    <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
+                      {item.expand?.produto?.codigo || '-'}
+                    </TableCell>
                     <TableCell
                       className={`font-bold text-slate-800 ${
                         item.carregado ? 'line-through text-slate-400' : ''
                       }`}
                     >
                       {item.expand?.produto?.nome || 'Produto'}
+                    </TableCell>
+                    <TableCell className="text-slate-600 text-sm">
+                      {item.expand?.produto?.marca || '-'}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {item.peso_total_kg.toFixed(1)} kg

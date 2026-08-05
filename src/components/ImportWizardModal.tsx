@@ -42,6 +42,7 @@ import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
 import { convertWeightToBoxesAndPieces, parseBrazilianWeight } from '@/lib/conversion'
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
+import { updateProduto } from '@/services/produtos'
 import { ProdutoModal } from './ProdutoModal'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
@@ -66,6 +67,7 @@ interface ProcessedRow {
   caixas: number
   pecas: number
   textoFormatado: string
+  marca?: string
 }
 
 export function ImportWizardModal({
@@ -82,6 +84,7 @@ export function ImportWizardModal({
   const [parsedData, setParsedData] = useState<ParsedSheetData | null>(null)
   const [colProduto, setColProduto] = useState<string>('')
   const [colPeso, setColPeso] = useState<string>('')
+  const [colMarca, setColMarca] = useState<string>('')
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([])
   const [substituir, setSubstituir] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -104,6 +107,7 @@ export function ImportWizardModal({
     setParsedData(null)
     setColProduto('')
     setColPeso('')
+    setColMarca('')
     setProcessedRows([])
     setSubstituir(false)
     setWeightAcknowledged(false)
@@ -119,6 +123,7 @@ export function ImportWizardModal({
       setParsedData(data)
       setColProduto(data.headers[0] || '')
       setColPeso(data.headers[16] || data.headers[1] || '')
+      setColMarca(data.headers[1] || '')
       setStep(2)
     } catch (err) {
       toast({
@@ -163,17 +168,21 @@ export function ImportWizardModal({
 
   const processSheetRows = () => {
     if (!parsedData || !colProduto || !colPeso) return
-    const aggregated: Record<string, { rawCode: string; pesoTotal: number }> = {}
+    const aggregated: Record<string, { rawCode: string; pesoTotal: number; marca: string }> = {}
 
     parsedData.rows.forEach((row) => {
       const code = (row[colProduto] || '').trim()
       const weightRaw = row[colPeso] || ''
       if (!code) return
       const weight = parseBrazilianWeight(weightRaw)
+      const marcaVal = colMarca ? (row[colMarca] || '').trim() : ''
       if (aggregated[code]) {
         aggregated[code].pesoTotal += weight
+        if (marcaVal && !aggregated[code].marca) {
+          aggregated[code].marca = marcaVal
+        }
       } else {
-        aggregated[code] = { rawCode: code, pesoTotal: weight }
+        aggregated[code] = { rawCode: code, pesoTotal: weight, marca: marcaVal }
       }
     })
 
@@ -186,6 +195,7 @@ export function ImportWizardModal({
           id: `row-${idx}`,
           rawCode: item.rawCode,
           pesoKg,
+          marca: item.marca,
           matchStatus: 'nao_encontrado' as const,
           weightWarning: false,
           caixas: 0,
@@ -198,6 +208,7 @@ export function ImportWizardModal({
         id: `row-${idx}`,
         rawCode: item.rawCode,
         pesoKg,
+        marca: item.marca,
         matchStatus: 'ok' as const,
         weightWarning: false,
         caixas: 0,
@@ -284,6 +295,9 @@ export function ImportWizardModal({
       let totalPecas = 0
       for (const row of valid) {
         if (!row.matchedProduto) continue
+        if (row.marca && row.matchedProduto.marca !== row.marca) {
+          await updateProduto(row.matchedProduto.id, { marca: row.marca }).catch(() => {})
+        }
         await createRomaneioItem({
           romaneio: romaneioId,
           produto: row.matchedProduto.id,
@@ -388,10 +402,25 @@ export function ImportWizardModal({
                   Mapeie as colunas da sua planilha correspondentes ao{' '}
                   <strong>Código do Produto</strong> e <strong>Peso Total (kg)</strong>:
                 </p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <Label>Coluna do Código</Label>
                     <Select value={colProduto} onValueChange={setColProduto}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {parsedData.headers.map((h) => (
+                          <SelectItem key={h} value={h}>
+                            {h}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Coluna da Marca</Label>
+                    <Select value={colMarca} onValueChange={setColMarca}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -428,9 +457,12 @@ export function ImportWizardModal({
                     {parsedData.rows.slice(0, 3).map((r, i) => (
                       <div
                         key={i}
-                        className="flex justify-between py-1 border-b border-slate-200 last:border-0"
+                        className="flex justify-between gap-2 py-1 border-b border-slate-200 last:border-0"
                       >
                         <span className="font-medium text-slate-700">{r[colProduto] || '-'}</span>
+                        <span className="text-slate-500 flex-1 text-center">
+                          {colMarca ? r[colMarca] || '-' : ''}
+                        </span>
                         <span className="text-slate-500">{r[colPeso] || '-'}</span>
                       </div>
                     ))}
@@ -452,6 +484,7 @@ export function ImportWizardModal({
                         <TableHead>Código</TableHead>
                         <TableHead>Peso (kg)</TableHead>
                         <TableHead>Produto</TableHead>
+                        <TableHead>Marca</TableHead>
                         <TableHead>Resultado</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="w-8"></TableHead>
@@ -516,6 +549,9 @@ export function ImportWizardModal({
                                 </Button>
                               </div>
                             )}
+                          </TableCell>
+                          <TableCell className="text-slate-600 text-xs">
+                            {row.marca || '-'}
                           </TableCell>
                           <TableCell className="font-bold text-orange-600">
                             {row.textoFormatado}

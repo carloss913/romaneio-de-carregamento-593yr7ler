@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T00:09:54.195Z",
+  "generatedAt": "2026-08-05T00:26:52.193Z",
   "collections": [
     {
       "name": "users",
@@ -101,6 +101,12 @@
         },
         {
           "name": "codigo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "marca",
           "type": "text",
           "required": false,
           "system": false

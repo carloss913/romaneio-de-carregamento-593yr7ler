@@ -135,6 +135,7 @@ export default function Produtos() {
             <TableRow>
               <TableHead>Código</TableHead>
               <TableHead>Produto</TableHead>
+              <TableHead>Marca</TableHead>
               <TableHead className="text-right">Peso Caixa (kg)</TableHead>
               <TableHead className="text-center">Peças por Caixa</TableHead>
               <TableHead className="text-right">Peso Peça (kg)</TableHead>
@@ -145,7 +146,7 @@ export default function Produtos() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-slate-400">
+                <TableCell colSpan={8} className="text-center py-8 text-slate-400">
                   Nenhum produto encontrado.
                 </TableCell>
               </TableRow>
@@ -156,6 +157,7 @@ export default function Produtos() {
                     {p.codigo || '-'}
                   </TableCell>
                   <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
+                  <TableCell className="text-slate-600 text-sm">{p.marca || '-'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     {p.peso_caixa_kg.toFixed(1)} kg
                   </TableCell>

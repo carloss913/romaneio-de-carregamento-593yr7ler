@@ -8,6 +8,7 @@ export const getProduto = (id: string) => pb.collection('produtos').getOne<Produ
 export const createProduto = (data: {
   codigo?: string
   nome: string
+  marca?: string
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number
@@ -19,6 +20,7 @@ export const updateProduto = (
   data: Partial<{
     codigo: string
     nome: string
+    marca: string
     peso_caixa_kg: number
     pecas_por_caixa: number
     peso_peca_kg: number
