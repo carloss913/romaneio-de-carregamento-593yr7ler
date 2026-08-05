@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Truck, ArrowRight, Lock, Mail } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
@@ -54,9 +54,7 @@ export default function Login() {
             <Truck className="w-8 h-8" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-black tracking-tight">
-              Catálogo de Carregamento
-            </CardTitle>
+            <CardTitle className="text-2xl font-black tracking-tight">Romaneio</CardTitle>
             <CardDescription className="text-slate-400 text-xs mt-1">
               Controle de Cargas, Romaneios e Conversão de Caixas
             </CardDescription>
@@ -118,10 +116,7 @@ export default function Login() {
             </Button>
 
             <p className="text-xs text-center text-slate-400">
-              Não possui conta?{' '}
-              <Link to="/cadastro" className="text-orange-400 font-semibold hover:underline">
-                Criar conta
-              </Link>
+              Acesso restrito a usuários autorizados.
             </p>
           </CardFooter>
         </form>

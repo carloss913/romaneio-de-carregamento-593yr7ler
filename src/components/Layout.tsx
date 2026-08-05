@@ -214,7 +214,7 @@ export default function Layout() {
             <DialogTitle>Sair do Sistema?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-500 py-2">
-            Tem certeza que deseja encerrar sua sessão no Catálogo de Carregamento?
+            Tem certeza que deseja encerrar sua sessão no Romaneio?
           </p>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => setLogoutModalOpen(false)}>

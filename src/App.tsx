@@ -11,7 +11,6 @@ import RotaDetail from './pages/RotaDetail'
 import RomaneioDetail from './pages/RomaneioDetail'
 import Produtos from './pages/Produtos'
 import Login from './pages/Login'
-import Cadastro from './pages/Cadastro'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -22,7 +21,6 @@ const App = () => (
         <Sonner />
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/cadastro" element={<Cadastro />} />
 
           <Route
             element={
