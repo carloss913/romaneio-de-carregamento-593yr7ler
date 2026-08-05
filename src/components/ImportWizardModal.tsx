@@ -130,7 +130,7 @@ export function ImportWizardModal({
       setColPeso(data.headers[16] || data.headers[1] || '')
       setColMarca(data.headers[10] || '')
       setColNome(data.headers[3] || data.headers[1] || '')
-      setColSecao(data.headers.find((h: string) => /se[çc][ãa]o/i.test(h)) || '')
+      setColSecao(data.headers[15] || '')
       setStep(2)
     } catch (err) {
       toast({

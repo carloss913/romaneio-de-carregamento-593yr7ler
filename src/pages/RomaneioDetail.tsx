@@ -9,7 +9,8 @@ import {
   Lock,
   Unlock,
   Trash2,
-  Share2,
+  Copy,
+  Check,
   Send,
   Settings,
   Save,
@@ -81,6 +82,7 @@ export default function RomaneioDetail() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [editingObs, setEditingObs] = useState(false)
   const [obsText, setObsText] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const loadData = async () => {
     if (!id) return
@@ -115,11 +117,18 @@ export default function RomaneioDetail() {
 
   const isFinalizado = romaneio.status === 'finalizado'
 
-  const sortedItens = [...itens].sort((a, b) => {
-    const sa = getSecaoOrder(a.expand?.produto?.secao)
-    const sb = getSecaoOrder(b.expand?.produto?.secao)
-    return sa - sb
-  })
+  const sortedItens = [...itens]
+    .sort((a, b) => {
+      const ca = new Date(a.created).getTime()
+      const cb = new Date(b.created).getTime()
+      if (ca !== cb) return ca - cb
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    })
+    .sort((a, b) => {
+      const sa = getSecaoOrder(a.expand?.produto?.secao)
+      const sb = getSecaoOrder(b.expand?.produto?.secao)
+      return sa - sb
+    })
 
   const totalPeso = itens.reduce((a, b) => a + b.peso_total_kg, 0)
   const totalCaixas = itens.reduce((a, b) => a + b.caixas, 0)
@@ -204,10 +213,13 @@ export default function RomaneioDetail() {
     }
   }
 
-  const handleShareWhatsApp = () => {
+  const handleCopyLink = () => {
     const url = `${window.location.origin}/romaneios/${romaneio.id}`
-    const msg = `Olá! Segue o link do romaneio para conferência de carregamento:\n${url}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true)
+      toast({ title: 'Link copiado!' })
+      setTimeout(() => setLinkCopied(false), 2000)
+    })
   }
 
   const handleSendConclusion = () => {
@@ -292,13 +304,27 @@ export default function RomaneioDetail() {
                 >
                   <Plus className="w-4 h-4 mr-1" /> Item Manual
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleShareWhatsApp}
-                  className="rounded-xl font-semibold text-green-600 border-green-400 hover:bg-green-50"
-                >
-                  <Share2 className="w-4 h-4 mr-1" /> Compartilhar via WhatsApp
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/romaneios/${romaneio.id}`}
+                    className="text-xs h-9 w-48 rounded-xl"
+                    onClick={(e) => e.currentTarget.select()}
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyLink}
+                    className="rounded-xl h-9 w-9"
+                    title="Copiar link"
+                  >
+                    {linkCopied ? (
+                      <Check className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
               </>
             )}
 
