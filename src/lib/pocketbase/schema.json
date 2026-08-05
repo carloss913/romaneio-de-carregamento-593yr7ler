@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T00:42:59.141Z",
+  "generatedAt": "2026-08-05T00:51:09.584Z",
   "collections": [
     {
       "name": "users",
@@ -215,7 +215,7 @@
         {
           "name": "caixas",
           "type": "number",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
