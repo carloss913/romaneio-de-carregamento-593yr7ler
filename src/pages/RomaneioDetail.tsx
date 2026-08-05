@@ -15,6 +15,7 @@ import {
   Settings,
   Save,
   X,
+  Pencil,
 } from 'lucide-react'
 import { Romaneio, RomaneioItem, Produto, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
@@ -57,6 +58,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { ImportWizardModal } from '@/components/ImportWizardModal'
+import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { PrintManifest } from '@/components/PrintManifest'
 import { ConfigPhoneModal } from '@/components/ConfigPhoneModal'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -83,6 +85,7 @@ export default function RomaneioDetail() {
   const [editingObs, setEditingObs] = useState(false)
   const [obsText, setObsText] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
+  const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
 
   const loadData = async () => {
     if (!id) return
@@ -232,7 +235,9 @@ export default function RomaneioDetail() {
       })
       return
     }
-    const msg = `*Conclusão de Carregamento*\n\nRomaneio: #${romaneio.id.slice(-4).toUpperCase()}\nRota: ${romaneio.rota}\nData: ${new Date(romaneio.data).toLocaleDateString('pt-BR')}\nStatus: ${isFinalizado ? 'Finalizado' : 'Em Andamento'}\nTotal: ${totalPeso.toFixed(1)} kg\nProdutos: ${itens.length}`
+    const msg = buildWhatsAppMessage(romaneio, itens, {
+      statusText: isFinalizado ? 'Finalizado' : 'Em Andamento',
+    })
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
@@ -244,6 +249,18 @@ export default function RomaneioDetail() {
       loadData()
     } catch {
       toast({ title: 'Erro ao salvar observações', variant: 'destructive' })
+    }
+  }
+
+  const handleSaveItemObs = async () => {
+    if (!editingItemObs) return
+    try {
+      await updateRomaneioItem(editingItemObs.id, { observacao: editingItemObs.text })
+      toast({ title: 'Observação do item salva!' })
+      setEditingItemObs(null)
+      loadData()
+    } catch {
+      toast({ title: 'Erro ao salvar observação', variant: 'destructive' })
     }
   }
 
@@ -487,7 +504,8 @@ export default function RomaneioDetail() {
                   <TableHead>Marca</TableHead>
                   <TableHead className="text-right">Peso Total (kg)</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
-                  {!isFinalizado && <TableHead className="text-right">Ação</TableHead>}
+                  <TableHead>Obs.</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -523,18 +541,34 @@ export default function RomaneioDetail() {
                     <TableCell className="text-right font-black text-slate-900">
                       {getItemQuantidade(item)}
                     </TableCell>
-                    {!isFinalizado && (
-                      <TableCell className="text-right">
+                    <TableCell className="text-xs text-slate-500 max-w-[160px] truncate">
+                      {item.observacao || '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8"
+                          onClick={() =>
+                            setEditingItemObs({ id: item.id, text: item.observacao || '' })
+                          }
+                          className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-8 w-8"
+                          title="Editar observação do item"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Pencil className="w-4 h-4" />
                         </Button>
-                      </TableCell>
-                    )}
+                        {!isFinalizado && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -617,6 +651,39 @@ export default function RomaneioDetail() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteRomaneio}>
               Excluir Definitivamente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingItemObs} onOpenChange={(v) => !v && setEditingItemObs(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-blue-500" />
+              Observação do Item
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Textarea
+              value={editingItemObs?.text || ''}
+              onChange={(e) =>
+                setEditingItemObs((prev) => (prev ? { ...prev, text: e.target.value } : null))
+              }
+              placeholder="Digite uma observação para este item..."
+              rows={4}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditingItemObs(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveItemObs}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              <Save className="w-4 h-4 mr-1" /> Salvar Observação
             </Button>
           </DialogFooter>
         </DialogContent>

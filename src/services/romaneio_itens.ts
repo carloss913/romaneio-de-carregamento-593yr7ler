@@ -23,6 +23,7 @@ export const updateRomaneioItem = (
     caixas: number
     pecas: number
     carregado: boolean
+    observacao: string
   }>,
 ) => pb.collection('romaneio_itens').update<RomaneioItem>(id, data)
 

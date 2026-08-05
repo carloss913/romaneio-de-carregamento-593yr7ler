@@ -6,6 +6,7 @@ import { getRomaneio, updateRomaneio } from '@/services/romaneios'
 import { getRomaneioItens, updateRomaneioItem } from '@/services/romaneio_itens'
 import { getConfiguracoes } from '@/services/configuracoes'
 import { formatBoxesAndPieces } from '@/lib/conversion'
+import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -139,7 +140,10 @@ export default function PublicLoading() {
     }
     const statusText =
       forceStatus === 'finalizado' ? 'Finalizado' : isFinalizado ? 'Finalizado' : 'Em Andamento'
-    const msg = `*Conclusão de Carregamento*\n\nRomaneio: #${romaneio.id.slice(-4).toUpperCase()}\nRota: ${romaneio.rota}\nData: ${new Date(romaneio.data).toLocaleDateString('pt-BR')}\nStatus: ${statusText}\nTotal de itens: ${itens.length}\nItens carregados: ${carregadoCount}/${itens.length}`
+    const msg = buildWhatsAppMessage(romaneio, itens, {
+      statusText,
+      carregadoCount,
+    })
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 

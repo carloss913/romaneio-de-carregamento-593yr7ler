@@ -28,6 +28,7 @@ export interface RomaneioItem extends RecordModel {
   caixas: number
   pecas: number
   carregado: boolean
+  observacao?: string
   expand?: {
     produto?: Produto
     romaneio?: Romaneio

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T01:58:29.330Z",
+  "generatedAt": "2026-08-05T02:14:59.239Z",
   "collections": [
     {
       "name": "users",
@@ -248,6 +248,12 @@
         {
           "name": "carregado",
           "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
           "required": false,
           "system": false
         }
