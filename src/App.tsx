@@ -12,6 +12,7 @@ import RomaneioDetail from './pages/RomaneioDetail'
 import Produtos from './pages/Produtos'
 import Contato from './pages/Contato'
 import Login from './pages/Login'
+import RomaneioView from './pages/RomaneioView'
 import NotFound from './pages/NotFound'
 
 const App = () => (
