@@ -430,28 +430,34 @@ export function ImportWizardModal({
 
           <div className="flex-1 overflow-y-auto py-3 space-y-4">
             {step === 1 && (
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-3 bg-slate-50">
-                <Upload className="w-10 h-10 text-orange-500 animate-bounce" />
-                <div>
-                  <p className="font-semibold text-slate-700">
-                    Selecione sua planilha de carregamento
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Formatos aceitos: .xlsx, .xls, .csv (até 5MB)
-                  </p>
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 leading-relaxed">
+                  <strong>Observação:</strong> caso a exportação seja de uma página, devemos mudar
+                  manualmente a marca para a coluna 12 e peso para a coluna 18.
                 </div>
-                <label className="cursor-pointer">
-                  <Input
-                    type="file"
-                    accept=".xlsx,.xls,.csv,.txt"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <Button type="button" variant="outline" className="mt-2 pointer-events-none">
-                    Escolher Arquivo
-                  </Button>
-                </label>
-              </div>
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-3 bg-slate-50">
+                  <Upload className="w-10 h-10 text-orange-500 animate-bounce" />
+                  <div>
+                    <p className="font-semibold text-slate-700">
+                      Selecione sua planilha de carregamento
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Formatos aceitos: .xlsx, .xls, .csv (até 5MB)
+                    </p>
+                  </div>
+                  <label className="cursor-pointer">
+                    <Input
+                      type="file"
+                      accept=".xlsx,.xls,.csv,.txt"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <Button type="button" variant="outline" className="mt-2 pointer-events-none">
+                      Escolher Arquivo
+                    </Button>
+                  </label>
+                </div>
+              </>
             )}
 
             {step === 2 && parsedData && (

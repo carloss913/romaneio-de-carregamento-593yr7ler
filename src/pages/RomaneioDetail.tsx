@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   Save,
   X,
   Pencil,
+  RefreshCw,
 } from 'lucide-react'
 import { Romaneio, RomaneioItem, Produto, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
@@ -27,6 +28,7 @@ import {
 } from '@/services/romaneio_itens'
 import { getProdutos } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
+import { refreshRomaneioItens } from '@/services/romaneio_itens'
 import { convertWeightToBoxesAndPieces, formatBoxesAndPieces } from '@/lib/conversion'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -86,6 +88,33 @@ export default function RomaneioDetail() {
   const [obsText, setObsText] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
   const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshingRef = useRef(false)
+
+  const handleRefresh = async (showToast = true) => {
+    if (refreshingRef.current || !romaneio) return
+    refreshingRef.current = true
+    setRefreshing(true)
+    try {
+      const freshProdutos = await getProdutos()
+      setProdutos(freshProdutos)
+      const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
+      if (showToast) {
+        toast({
+          title:
+            updatedCount > 0
+              ? `${updatedCount} item(ns) atualizado(s) com os dados mais recentes.`
+              : 'Nenhum item precisou de atualização.',
+        })
+      }
+      if (updatedCount > 0) loadData()
+    } catch {
+      if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
+    }
+  }
 
   const loadData = async () => {
     if (!id) return
@@ -115,6 +144,7 @@ export default function RomaneioDetail() {
 
   useRealtime('romaneios', () => loadData())
   useRealtime('romaneio_itens', () => loadData())
+  useRealtime('produtos', () => handleRefresh(false))
 
   if (!romaneio) return null
 
@@ -359,6 +389,15 @@ export default function RomaneioDetail() {
               className="rounded-xl font-semibold"
             >
               <Printer className="w-4 h-4 mr-1" /> Imprimir
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => handleRefresh()}
+              disabled={refreshing}
+              className="rounded-xl font-semibold text-blue-600 border-blue-400 hover:bg-blue-50"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> Atualizar
             </Button>
 
             <Button

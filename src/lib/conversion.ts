@@ -132,3 +132,14 @@ export function parseBrazilianWeight(input: string | number): number {
 
   return parseFloat(cleaned) || 0
 }
+
+export function recalculatePesoTotal(
+  caixas: number,
+  pecas: number,
+  pesoCaixaKg?: number,
+  pesoPecaKg?: number,
+): number {
+  const pesoFromCaixas = (pesoCaixaKg ?? 0) * caixas
+  const pesoFromPecas = (pesoPecaKg ?? 0) * pecas
+  return Math.round((pesoFromCaixas + pesoFromPecas) * 100) / 100
+}

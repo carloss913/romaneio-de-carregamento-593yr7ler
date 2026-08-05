@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Truck, CheckCircle2, Lock, MessageCircle, Save, X } from 'lucide-react'
+import { Truck, CheckCircle2, Lock, MessageCircle, Save, X, RefreshCw } from 'lucide-react'
 import { Romaneio, RomaneioItem, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio } from '@/services/romaneios'
-import { getRomaneioItens, updateRomaneioItem } from '@/services/romaneio_itens'
+import {
+  getRomaneioItens,
+  updateRomaneioItem,
+  refreshRomaneioItens,
+} from '@/services/romaneio_itens'
+import { getProdutos } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
 import { formatBoxesAndPieces } from '@/lib/conversion'
 import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
@@ -32,6 +37,32 @@ export default function PublicLoading() {
   const [obsText, setObsText] = useState('')
   const [loading, setLoading] = useState(true)
   const [finalizing, setFinalizing] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshingRef = useRef(false)
+
+  const handleRefresh = async (showToast = true) => {
+    if (refreshingRef.current || !romaneio) return
+    refreshingRef.current = true
+    setRefreshing(true)
+    try {
+      const freshProdutos = await getProdutos()
+      const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
+      if (showToast) {
+        toast({
+          title:
+            updatedCount > 0
+              ? `${updatedCount} item(ns) atualizado(s).`
+              : 'Nenhum item precisou de atualização.',
+        })
+      }
+      if (updatedCount > 0) loadData()
+    } catch {
+      if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
+    }
+  }
 
   const loadData = async () => {
     if (!id) return
@@ -59,6 +90,7 @@ export default function PublicLoading() {
 
   useRealtime('romaneios', () => loadData())
   useRealtime('romaneio_itens', () => loadData())
+  useRealtime('produtos', () => handleRefresh(false))
 
   if (loading) {
     return (
@@ -214,9 +246,21 @@ export default function PublicLoading() {
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-bold text-slate-800">Progresso do Carregamento</h2>
-            <span className="text-sm font-bold text-slate-600 tabular-nums">
-              {carregadoCount}/{itens.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleRefresh()}
+                disabled={refreshing}
+                className="h-8 text-xs text-blue-600 border-blue-400 hover:bg-blue-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+              <span className="text-sm font-bold text-slate-600 tabular-nums">
+                {carregadoCount}/{itens.length}
+              </span>
+            </div>
           </div>
           <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
             <div
