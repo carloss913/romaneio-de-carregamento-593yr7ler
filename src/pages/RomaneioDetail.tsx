@@ -48,13 +48,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -82,6 +75,9 @@ export default function RomaneioDetail() {
   const [manualItemModal, setManualItemModal] = useState(false)
   const [selectedProdutoId, setSelectedProdutoId] = useState('')
   const [pesoManual, setPesoManual] = useState<number | ''>('')
+  const [produtoSearch, setProdutoSearch] = useState('')
+  const [showSugestoes, setShowSugestoes] = useState(false)
+  const produtoComboRef = useRef<HTMLDivElement>(null)
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [editingObs, setEditingObs] = useState(false)
@@ -146,9 +142,30 @@ export default function RomaneioDetail() {
   useRealtime('romaneio_itens', () => loadData())
   useRealtime('produtos', () => handleRefresh(false))
 
+  useEffect(() => {
+    if (!showSugestoes) return
+    const handler = (e: MouseEvent) => {
+      if (produtoComboRef.current && !produtoComboRef.current.contains(e.target as Node)) {
+        setShowSugestoes(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSugestoes])
+
   if (!romaneio) return null
 
   const isFinalizado = romaneio.status === 'finalizado'
+
+  const selectedProd = produtos.find((p) => p.id === selectedProdutoId) || null
+  const filteredProdutos = produtos
+    .filter((p) => p.ativo)
+    .filter((p) => {
+      const q = produtoSearch.trim().toLowerCase()
+      if (!q) return true
+      return (p.codigo || '').toLowerCase().includes(q)
+    })
+    .slice(0, 100)
 
   const sortedItens = [...itens]
     .sort((a, b) => {
@@ -206,6 +223,8 @@ export default function RomaneioDetail() {
       setManualItemModal(false)
       setSelectedProdutoId('')
       setPesoManual('')
+      setProdutoSearch('')
+      setShowSugestoes(false)
       loadData()
     } catch {
       toast({ title: 'Erro ao adicionar item', variant: 'destructive' })
@@ -622,29 +641,88 @@ export default function RomaneioDetail() {
       </div>
 
       {/* Manual Item Modal */}
-      <Dialog open={manualItemModal} onOpenChange={setManualItemModal}>
+      <Dialog
+        open={manualItemModal}
+        onOpenChange={(open) => {
+          setManualItemModal(open)
+          if (!open) {
+            setSelectedProdutoId('')
+            setPesoManual('')
+            setProdutoSearch('')
+            setShowSugestoes(false)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Adicionar Item Manual</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAddManualItem} className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Produto</Label>
-              <Select value={selectedProdutoId} onValueChange={setSelectedProdutoId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o produto..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {produtos
-                    .filter((p) => p.ativo)
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nome}
-                        {p.peso_caixa_kg ? ` (Caixa ${p.peso_caixa_kg}kg)` : ''}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <Label>Produto (busca por código)</Label>
+              <div className="relative" ref={produtoComboRef}>
+                <Input
+                  type="text"
+                  value={selectedProd ? selectedProd.codigo || '' : produtoSearch}
+                  onChange={(e) => {
+                    setProdutoSearch(e.target.value)
+                    setSelectedProdutoId('')
+                    setShowSugestoes(true)
+                  }}
+                  onFocus={() => setShowSugestoes(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !selectedProdutoId && filteredProdutos.length > 0) {
+                      e.preventDefault()
+                      const p = filteredProdutos[0]
+                      setSelectedProdutoId(p.id)
+                      setProdutoSearch('')
+                      setShowSugestoes(false)
+                    }
+                  }}
+                  placeholder="Digite o código do produto..."
+                  autoComplete="off"
+                />
+                {showSugestoes && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                    {filteredProdutos.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-slate-400">
+                        Nenhum produto encontrado para o código informado.
+                      </div>
+                    ) : (
+                      filteredProdutos.map((p) => (
+                        <button
+                          type="button"
+                          key={p.id}
+                          onClick={() => {
+                            setSelectedProdutoId(p.id)
+                            setProdutoSearch('')
+                            setShowSugestoes(false)
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-100"
+                        >
+                          <span className="font-mono text-xs text-slate-500 tabular-nums">
+                            {p.codigo || '-'}
+                          </span>
+                          <span className="flex-1 truncate text-sm text-slate-800">{p.nome}</span>
+                          {p.marca ? (
+                            <span className="text-xs text-slate-400">{p.marca}</span>
+                          ) : null}
+                          {p.peso_caixa_kg ? (
+                            <span className="text-xs text-slate-400">Cx {p.peso_caixa_kg}kg</span>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              {selectedProd ? (
+                <p className="text-xs text-slate-500">
+                  Selecionado:{' '}
+                  <span className="font-semibold text-slate-700">{selectedProd.nome}</span>
+                  {selectedProd.peso_caixa_kg ? ` • Caixa ${selectedProd.peso_caixa_kg}kg` : ''}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">
