@@ -328,7 +328,7 @@ export default function RomaneioDetail() {
                 )}
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Data: {new Date(romaneio.data).toLocaleDateString('pt-BR')} • {itens.length}{' '}
+                Aberto em {new Date(romaneio.created).toLocaleString('pt-BR')} • {itens.length}{' '}
                 produtos carregados
               </p>
             </div>
@@ -470,17 +470,19 @@ export default function RomaneioDetail() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-base font-bold text-slate-800">Observações do Romaneio</h2>
             {!editingObs ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setObsText(romaneio.observacoes || '')
-                  setEditingObs(true)
-                }}
-                className="text-slate-500 hover:text-slate-800"
-              >
-                Editar
-              </Button>
+              !isFinalizado ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setObsText(romaneio.observacoes || '')
+                    setEditingObs(true)
+                  }}
+                  className="text-slate-500 hover:text-slate-800"
+                >
+                  Editar
+                </Button>
+              ) : null
             ) : (
               <div className="flex gap-1">
                 <Button
@@ -586,17 +588,19 @@ export default function RomaneioDetail() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            setEditingItemObs({ id: item.id, text: item.observacao || '' })
-                          }
-                          className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-8 w-8"
-                          title="Editar observação do item"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                        {!isFinalizado && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setEditingItemObs({ id: item.id, text: item.observacao || '' })
+                            }
+                            className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-8 w-8"
+                            title="Editar observação do item"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
                         {!isFinalizado && (
                           <Button
                             variant="ghost"

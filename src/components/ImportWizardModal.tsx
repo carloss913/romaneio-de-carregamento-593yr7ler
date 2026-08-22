@@ -479,7 +479,7 @@ export function ImportWizardModal({
               <div className="space-y-4">
                 <p className="text-sm text-slate-600">
                   Selecione a <strong>quantidade de páginas</strong> da exportação. As colunas serão
-                  preenchidas automaticamente:
+                  preenchidas automaticamente, mas podem ser ajustadas manualmente se necessário:
                 </p>
                 <div className="space-y-1.5 max-w-xs">
                   <Label>Quantidade de páginas</Label>
@@ -503,19 +503,26 @@ export function ImportWizardModal({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                   {[
-                    { label: 'Código', value: colProduto },
-                    { label: 'Descrição', value: colNome },
-                    { label: 'Marca', value: colMarca },
-                    { label: 'Seção', value: colSecao },
-                    { label: 'Peso (kg)', value: colPeso },
+                    { label: 'Código', value: colProduto, onChange: setColProduto },
+                    { label: 'Descrição', value: colNome, onChange: setColNome },
+                    { label: 'Marca', value: colMarca, onChange: setColMarca },
+                    { label: 'Seção', value: colSecao, onChange: setColSecao },
+                    { label: 'Peso (kg)', value: colPeso, onChange: setColPeso },
                   ].map((f) => (
                     <div key={f.label} className="space-y-1.5">
                       <Label>{f.label}</Label>
-                      <Input
-                        readOnly
-                        value={f.value || '—'}
-                        className="bg-slate-50 text-slate-600 font-medium cursor-not-allowed"
-                      />
+                      <Select value={f.value} onValueChange={f.onChange}>
+                        <SelectTrigger className="bg-slate-50">
+                          <SelectValue placeholder="Selecione a coluna" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {parsedData.headers.map((h) => (
+                            <SelectItem key={h} value={h}>
+                              {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   ))}
                 </div>
