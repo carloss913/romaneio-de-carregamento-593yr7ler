@@ -158,6 +158,15 @@ export default function PublicLoading() {
     return formatBoxesAndPieces(item.caixas, item.pecas)
   }
 
+  const getItemCodigoMarca = (item: RomaneioItem): string => {
+    const codigo = item.expand?.produto?.codigo
+    const marca = item.expand?.produto?.marca
+    if (codigo && marca) return `${codigo} | ${marca}`
+    if (codigo) return codigo
+    if (marca) return marca
+    return ''
+  }
+
   const handleToggleCarregado = async (item: RomaneioItem) => {
     try {
       await updateRomaneioItem(item.id, { carregado: !item.carregado })
@@ -320,8 +329,8 @@ export default function PublicLoading() {
                         >
                           {item.expand?.produto?.nome || 'Produto'}
                         </p>
-                        {item.expand?.produto?.marca && (
-                          <p className="text-xs text-slate-400">{item.expand.produto.marca}</p>
+                        {getItemCodigoMarca(item) && (
+                          <p className="text-xs text-slate-400">{getItemCodigoMarca(item)}</p>
                         )}
                       </div>
                       <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
@@ -462,8 +471,8 @@ export default function PublicLoading() {
                       >
                         {item.expand?.produto?.nome || 'Produto'}
                       </p>
-                      {item.expand?.produto?.marca && (
-                        <p className="text-xs text-slate-400">{item.expand.produto.marca}</p>
+                      {getItemCodigoMarca(item) && (
+                        <p className="text-xs text-slate-400">{getItemCodigoMarca(item)}</p>
                       )}
                     </div>
                     <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
@@ -602,8 +611,8 @@ export default function PublicLoading() {
                 <p className="font-semibold text-slate-800">
                   {editingItem.expand?.produto?.nome || 'Produto'}
                 </p>
-                {editingItem.expand?.produto?.marca && (
-                  <p className="text-xs text-slate-400">{editingItem.expand.produto.marca}</p>
+                {getItemCodigoMarca(editingItem) && (
+                  <p className="text-xs text-slate-400">{getItemCodigoMarca(editingItem)}</p>
                 )}
               </div>
             )}
