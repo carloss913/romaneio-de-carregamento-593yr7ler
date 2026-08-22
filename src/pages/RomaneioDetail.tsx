@@ -555,6 +555,7 @@ export default function RomaneioDetail() {
                         <Checkbox
                           checked={item.carregado}
                           onCheckedChange={() => handleToggleCarregado(item)}
+                          disabled={isFinalizado}
                           className={
                             item.carregado ? 'border-emerald-500 bg-emerald-500 text-white' : ''
                           }

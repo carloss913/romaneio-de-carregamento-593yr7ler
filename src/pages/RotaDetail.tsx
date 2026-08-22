@@ -160,7 +160,10 @@ export default function RotaDetail() {
                         )}
                       </div>
                       <p className="text-xs text-slate-400 mt-1">
-                        Data de Carga: {new Date(rom.data).toLocaleDateString('pt-BR')}
+                        Data de Carga:{' '}
+                        {new Date(rom.data).toLocaleDateString('pt-BR', {
+                          timeZone: 'UTC',
+                        })}
                       </p>
                     </div>
 

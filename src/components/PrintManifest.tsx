@@ -33,7 +33,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             <RouteBadge rota={romaneio.rota} />
           </div>
           <p className="text-xs text-slate-600 mt-1">
-            Data: {new Date(romaneio.data).toLocaleDateString('pt-BR')}
+            Data: {new Date(romaneio.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
           </p>
         </div>
       </div>

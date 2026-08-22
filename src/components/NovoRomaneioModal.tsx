@@ -34,7 +34,12 @@ export function NovoRomaneioModal({ open, onOpenChange, defaultRota }: NovoRoman
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [rota, setRota] = useState<RotaType>(defaultRota || 'Piçarra')
-  const [data, setData] = useState(new Date().toISOString().split('T')[0])
+  const [data, setData] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`
+  })
   const [observacoes, setObservacoes] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {

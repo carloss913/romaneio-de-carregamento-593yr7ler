@@ -1,6 +1,15 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Truck, CheckCircle2, Lock, MessageCircle, Save, X, RefreshCw } from 'lucide-react'
+import {
+  Truck,
+  CheckCircle2,
+  Lock,
+  MessageCircle,
+  Save,
+  X,
+  RefreshCw,
+  Check,
+} from 'lucide-react'
 import { Romaneio, RomaneioItem, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio } from '@/services/romaneios'
 import {
@@ -206,6 +215,124 @@ export default function PublicLoading() {
 
   const sectionOrder = ['CONGELADO', 'GERAL', 'RESFRIADO', 'OUTROS']
 
+  if (isFinalizado) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="bg-slate-900 text-white sticky top-0 z-30">
+          <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-base font-black tracking-tight leading-tight">
+                  Romaneio #{romaneio.id.slice(-4).toUpperCase()}
+                </h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <RouteBadge rota={romaneio.rota} />
+                  <Badge className="bg-emerald-500 text-white text-[10px]">Finalizado</Badge>
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 font-medium">Aberto em</p>
+              <p className="text-xs font-bold whitespace-nowrap">
+                {new Date(romaneio.created).toLocaleString('pt-BR')}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-5">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-3">
+            <Lock className="w-6 h-6 text-emerald-600 shrink-0" />
+            <div>
+              <h2 className="font-bold text-emerald-800">Carregamento Finalizado</h2>
+              <p className="text-sm text-emerald-700">
+                Este romaneio foi finalizado. O link foi inativado e os itens estão bloqueados para
+                alterações.
+              </p>
+            </div>
+          </div>
+
+          {sectionOrder.map((secao) => {
+            const sectionItems = sectionGroups[secao]
+            if (!sectionItems || sectionItems.length === 0) return null
+            return (
+              <div
+                key={secao}
+                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
+              >
+                <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    {SECAO_LABELS[secao] || secao}
+                  </h3>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {sectionItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-4 px-5 py-3.5 ${
+                        item.carregado ? 'bg-emerald-50/50' : ''
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                          item.carregado
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : 'border-slate-300'
+                        }`}
+                      >
+                        {item.carregado && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`font-semibold text-slate-800 text-sm ${
+                            item.carregado ? 'line-through text-slate-400' : ''
+                          }`}
+                        >
+                          {item.expand?.produto?.nome || 'Produto'}
+                        </p>
+                        {item.expand?.produto?.marca && (
+                          <p className="text-xs text-slate-400">{item.expand.produto.marca}</p>
+                        )}
+                      </div>
+                      <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
+                        {getItemQuantidade(item)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+
+          {itens.length === 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-12 text-center text-slate-400">
+              Nenhum item neste romaneio.
+            </div>
+          )}
+
+          {romaneio.observacoes && (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+              <h2 className="text-base font-bold text-slate-800 mb-2">Observações</h2>
+              <p className="text-sm text-slate-600 whitespace-pre-wrap">{romaneio.observacoes}</p>
+            </div>
+          )}
+
+          <Button
+            onClick={() => sendWhatsAppConclusion('finalizado')}
+            variant="outline"
+            className="w-full rounded-xl h-12 font-bold text-green-600 border-green-500 hover:bg-green-50"
+          >
+            <MessageCircle className="w-5 h-5 mr-2" />
+            Enviar via WhatsApp
+          </Button>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-slate-900 text-white sticky top-0 z-30">
@@ -234,9 +361,9 @@ export default function PublicLoading() {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-slate-400 font-medium">Data</p>
-            <p className="text-sm font-bold">
-              {new Date(romaneio.data).toLocaleDateString('pt-BR')}
+            <p className="text-[10px] text-slate-400 font-medium">Aberto em</p>
+            <p className="text-xs font-bold whitespace-nowrap">
+              {new Date(romaneio.created).toLocaleString('pt-BR')}
             </p>
           </div>
         </div>

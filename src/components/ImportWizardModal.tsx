@@ -72,6 +72,19 @@ interface ProcessedRow {
   secao?: string
 }
 
+// Mapeamento de colunas (índices 0-based) conforme a quantidade de páginas da exportação.
+// 1 página: Código=Col1, Descrição=Col4, Marca=Col12, Seção=Col16, Peso=Col18
+// 2 páginas: Código=Col1, Descrição=Col4, Marca=Col11, Seção=Col16, Peso=Col17
+// 3 páginas: Código=Col1, Descrição=Col4, Marca=Col11, Seção=Col15, Peso=Col17
+const PAGE_COLUMN_MAP: Record<
+  '1' | '2' | '3',
+  { codigo: number; descricao: number; marca: number; secao: number; peso: number }
+> = {
+  '1': { codigo: 0, descricao: 3, marca: 11, secao: 15, peso: 17 },
+  '2': { codigo: 0, descricao: 3, marca: 10, secao: 15, peso: 16 },
+  '3': { codigo: 0, descricao: 3, marca: 10, secao: 14, peso: 16 },
+}
+
 export function ImportWizardModal({
   open,
   onOpenChange,
@@ -89,6 +102,7 @@ export function ImportWizardModal({
   const [colMarca, setColMarca] = useState<string>('')
   const [colNome, setColNome] = useState<string>('')
   const [colSecao, setColSecao] = useState<string>('')
+  const [numPaginas, setNumPaginas] = useState<'1' | '2' | '3'>('2')
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([])
   const [substituir, setSubstituir] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -104,6 +118,15 @@ export function ImportWizardModal({
   const weightWarningRows = processedRows.filter((r) => r.matchStatus === 'ok' && r.weightWarning)
   const validRows = processedRows.filter((r) => r.matchStatus === 'ok')
 
+  const applyPageCount = (n: '1' | '2' | '3', headers: string[]) => {
+    const m = PAGE_COLUMN_MAP[n]
+    setColProduto(headers[m.codigo] || '')
+    setColNome(headers[m.descricao] || '')
+    setColMarca(headers[m.marca] || '')
+    setColSecao(headers[m.secao] || '')
+    setColPeso(headers[m.peso] || '')
+  }
+
   const resetWizard = () => {
     setStep(1)
     setFile(null)
@@ -113,6 +136,7 @@ export function ImportWizardModal({
     setColMarca('')
     setColNome('')
     setColSecao('')
+    setNumPaginas('2')
     setProcessedRows([])
     setSubstituir(false)
     setWeightAcknowledged(false)
@@ -126,11 +150,8 @@ export function ImportWizardModal({
     try {
       const data = await parseExcelOrCsvFile(uploadedFile)
       setParsedData(data)
-      setColProduto(data.headers[0] || '')
-      setColPeso(data.headers[16] || data.headers[1] || '')
-      setColMarca(data.headers[10] || '')
-      setColNome(data.headers[3] || data.headers[1] || '')
-      setColSecao(data.headers[15] || '')
+      setNumPaginas('2')
+      applyPageCount('2', data.headers)
       setStep(2)
     } catch (err) {
       toast({
@@ -430,118 +451,73 @@ export function ImportWizardModal({
 
           <div className="flex-1 overflow-y-auto py-3 space-y-4">
             {step === 1 && (
-              <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 leading-relaxed">
-                  <strong>Observação:</strong> caso a exportação seja de uma página, devemos mudar
-                  manualmente a marca para a coluna 12 e peso para a coluna 18.
+              <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-3 bg-slate-50">
+                <Upload className="w-10 h-10 text-orange-500 animate-bounce" />
+                <div>
+                  <p className="font-semibold text-slate-700">
+                    Selecione sua planilha de carregamento
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Formatos aceitos: .xlsx, .xls, .csv (até 5MB)
+                  </p>
                 </div>
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-3 bg-slate-50">
-                  <Upload className="w-10 h-10 text-orange-500 animate-bounce" />
-                  <div>
-                    <p className="font-semibold text-slate-700">
-                      Selecione sua planilha de carregamento
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Formatos aceitos: .xlsx, .xls, .csv (até 5MB)
-                    </p>
-                  </div>
-                  <label className="cursor-pointer">
-                    <Input
-                      type="file"
-                      accept=".xlsx,.xls,.csv,.txt"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    <Button type="button" variant="outline" className="mt-2 pointer-events-none">
-                      Escolher Arquivo
-                    </Button>
-                  </label>
-                </div>
-              </>
+                <label className="cursor-pointer">
+                  <Input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.txt"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button type="button" variant="outline" className="mt-2 pointer-events-none">
+                    Escolher Arquivo
+                  </Button>
+                </label>
+              </div>
             )}
 
             {step === 2 && parsedData && (
               <div className="space-y-4">
                 <p className="text-sm text-slate-600">
-                  Mapeie as colunas da sua planilha correspondentes ao{' '}
-                  <strong>Código do Produto</strong> e <strong>Peso Total (kg)</strong>:
+                  Selecione a <strong>quantidade de páginas</strong> da exportação. As colunas
+                  serão preenchidas automaticamente:
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="space-y-1.5">
-                    <Label>Coluna do Código</Label>
-                    <Select value={colProduto} onValueChange={setColProduto}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {parsedData.headers.map((h) => (
-                          <SelectItem key={h} value={h}>
-                            {h}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Coluna da Descrição</Label>
-                    <Select value={colNome} onValueChange={setColNome}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {parsedData.headers.map((h) => (
-                          <SelectItem key={h} value={h}>
-                            {h}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Coluna da Marca</Label>
-                    <Select value={colMarca} onValueChange={setColMarca}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {parsedData.headers.map((h) => (
-                          <SelectItem key={h} value={h}>
-                            {h}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Coluna da Seção</Label>
-                    <Select value={colSecao} onValueChange={setColSecao}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {parsedData.headers.map((h) => (
-                          <SelectItem key={h} value={h}>
-                            {h}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Coluna do Peso (kg)</Label>
-                    <Select value={colPeso} onValueChange={setColPeso}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {parsedData.headers.map((h) => (
-                          <SelectItem key={h} value={h}>
-                            {h}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-1.5 max-w-xs">
+                  <Label>Quantidade de páginas</Label>
+                  <Select
+                    value={numPaginas}
+                    onValueChange={(v) => {
+                      const n = v as '1' | '2' | '3'
+                      setNumPaginas(n)
+                      applyPageCount(n, parsedData.headers)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 página</SelectItem>
+                      <SelectItem value="2">2 páginas</SelectItem>
+                      <SelectItem value="3">3 páginas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  {[
+                    { label: 'Código', value: colProduto },
+                    { label: 'Descrição', value: colNome },
+                    { label: 'Marca', value: colMarca },
+                    { label: 'Seção', value: colSecao },
+                    { label: 'Peso (kg)', value: colPeso },
+                  ].map((f) => (
+                    <div key={f.label} className="space-y-1.5">
+                      <Label>{f.label}</Label>
+                      <Input
+                        readOnly
+                        value={f.value || '—'}
+                        className="bg-slate-50 text-slate-600 font-medium cursor-not-allowed"
+                      />
+                    </div>
+                  ))}
                 </div>
                 <div className="border rounded-lg p-3 bg-slate-50">
                   <p className="text-xs font-semibold text-slate-500 mb-2">

@@ -204,8 +204,8 @@ export default function Index() {
                         Romaneio #{rom.id.slice(-4).toUpperCase()}
                       </p>
                       <p className="text-xs text-slate-400">
-                        {new Date(rom.data).toLocaleDateString('pt-BR')} • {romItens.length}{' '}
-                        produtos
+                        {new Date(rom.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} •{' '}
+                        {romItens.length} produtos
                       </p>
                     </div>
                   </div>
