@@ -1,6 +1,16 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Truck, CheckCircle2, Lock, MessageCircle, Save, X, RefreshCw, Check } from 'lucide-react'
+import {
+  Truck,
+  CheckCircle2,
+  Lock,
+  MessageCircle,
+  Save,
+  X,
+  RefreshCw,
+  Check,
+  Bell,
+} from 'lucide-react'
 import { Romaneio, RomaneioItem, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio } from '@/services/romaneios'
 import {
@@ -17,6 +27,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
 
@@ -39,6 +56,7 @@ export default function PublicLoading() {
   const [finalizing, setFinalizing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const refreshingRef = useRef(false)
+  const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
 
   const handleRefresh = async (showToast = true) => {
     if (refreshingRef.current || !romaneio) return
@@ -131,6 +149,8 @@ export default function PublicLoading() {
 
   const carregadoCount = itens.filter((i) => i.carregado).length
 
+  const editingItem = editingItemObs ? itens.find((i) => i.id === editingItemObs.id) : null
+
   const getItemQuantidade = (item: RomaneioItem): string => {
     if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
       return `${item.peso_total_kg.toFixed(1)} kg`
@@ -157,6 +177,22 @@ export default function PublicLoading() {
       loadData()
     } catch {
       toast({ title: 'Erro ao salvar observações', variant: 'destructive' })
+    }
+  }
+
+  const handleSaveItemObs = async () => {
+    if (!editingItemObs) return
+    try {
+      await updateRomaneioItem(editingItemObs.id, { observacao: editingItemObs.text })
+      setItens((prev) =>
+        prev.map((i) =>
+          i.id === editingItemObs.id ? { ...i, observacao: editingItemObs.text } : i,
+        ),
+      )
+      setEditingItemObs(null)
+      toast({ title: 'Observação do item salva!' })
+    } catch {
+      toast({ title: 'Erro ao salvar observação', variant: 'destructive' })
     }
   }
 
@@ -433,6 +469,31 @@ export default function PublicLoading() {
                     <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
                       {getItemQuantidade(item)}
                     </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setEditingItemObs({ id: item.id, text: item.observacao || '' })
+                      }
+                      className={`h-11 w-11 shrink-0 rounded-full ${
+                        item.observacao && item.observacao.trim().length > 0
+                          ? 'text-amber-500 hover:bg-amber-50'
+                          : 'text-slate-400 hover:bg-slate-100'
+                      }`}
+                      title={
+                        item.observacao && item.observacao.trim().length > 0
+                          ? 'Editar observação do item'
+                          : 'Adicionar observação ao item'
+                      }
+                    >
+                      <Bell
+                        className={`w-5 h-5 ${
+                          item.observacao && item.observacao.trim().length > 0
+                            ? 'fill-amber-400'
+                            : ''
+                        }`}
+                      />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -526,6 +587,49 @@ export default function PublicLoading() {
           </Button>
         </div>
       </main>
+
+      <Dialog open={!!editingItemObs} onOpenChange={(v) => !v && setEditingItemObs(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-amber-500" />
+              Observação do Item
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {editingItem && (
+              <div className="text-sm">
+                <p className="font-semibold text-slate-800">
+                  {editingItem.expand?.produto?.nome || 'Produto'}
+                </p>
+                {editingItem.expand?.produto?.marca && (
+                  <p className="text-xs text-slate-400">{editingItem.expand.produto.marca}</p>
+                )}
+              </div>
+            )}
+            <Textarea
+              value={editingItemObs?.text || ''}
+              onChange={(e) =>
+                setEditingItemObs((prev) => (prev ? { ...prev, text: e.target.value } : null))
+              }
+              placeholder="Digite uma observação para este item..."
+              rows={4}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditingItemObs(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveItemObs}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              <Save className="w-4 h-4 mr-1" /> Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
