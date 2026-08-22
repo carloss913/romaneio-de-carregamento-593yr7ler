@@ -478,8 +478,8 @@ export function ImportWizardModal({
             {step === 2 && parsedData && (
               <div className="space-y-4">
                 <p className="text-sm text-slate-600">
-                  Selecione a <strong>quantidade de páginas</strong> da exportação. As colunas
-                  serão preenchidas automaticamente:
+                  Selecione a <strong>quantidade de páginas</strong> da exportação. As colunas serão
+                  preenchidas automaticamente:
                 </p>
                 <div className="space-y-1.5 max-w-xs">
                   <Label>Quantidade de páginas</Label>

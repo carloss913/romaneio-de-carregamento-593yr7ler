@@ -53,7 +53,7 @@ function parseZipEntries(data: Uint8Array): ZipEntry[] {
 }
 
 async function decompressDeflate(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Response(new Blob([data])).body!
+  const stream = new Response(data.buffer as unknown as BodyInit).body!
   const decompressed = stream.pipeThrough(new DecompressionStream('deflate-raw'))
   const buffer = await new Response(decompressed).arrayBuffer()
   return new Uint8Array(buffer)

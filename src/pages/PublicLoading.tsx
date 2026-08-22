@@ -1,15 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import {
-  Truck,
-  CheckCircle2,
-  Lock,
-  MessageCircle,
-  Save,
-  X,
-  RefreshCw,
-  Check,
-} from 'lucide-react'
+import { Truck, CheckCircle2, Lock, MessageCircle, Save, X, RefreshCw, Check } from 'lucide-react'
 import { Romaneio, RomaneioItem, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio } from '@/services/romaneios'
 import {
