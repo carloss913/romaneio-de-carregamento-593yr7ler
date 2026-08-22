@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-22T17:49:33.456Z",
+  "generatedAt": "2026-08-22T18:44:32.542Z",
   "collections": [
     {
       "name": "users",
@@ -137,9 +137,10 @@
       "fields": [
         {
           "name": "rota",
-          "type": "text",
-          "required": false,
-          "system": false
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["Piçarra", "SFX", "Tucumã", "Floresta", "Outros"]
         },
         {
           "name": "data",

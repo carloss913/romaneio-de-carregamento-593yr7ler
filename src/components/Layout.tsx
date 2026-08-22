@@ -86,6 +86,19 @@ export default function Layout() {
           </Link>
 
           <Link
+            to="/rotas"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              location.pathname === '/rotas'
+                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            <span>Gerenciar Rotas</span>
+          </Link>
+
+          <Link
             to="/contato"
             onClick={() => setMobileMenuOpen(false)}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
