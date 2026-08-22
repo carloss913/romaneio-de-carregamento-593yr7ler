@@ -56,7 +56,7 @@ export const SECAO_ORDER: Record<string, number> = {
 }
 
 export function getSecaoOrder(secao?: string): number {
-  return SECAO_ORDER[secao || ''] ?? 99
+  return SECAO_ORDER[(secao || '').trim().toUpperCase()] ?? 99
 }
 
 const ROTAS_COLOR_PALETTE = [
