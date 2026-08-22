@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
-import { RotaType, ROTAS, Romaneio, RomaneioItem } from '@/types/database'
+import { RotaType, Romaneio, RomaneioItem } from '@/types/database'
 import { getRomaneiosByRota, deleteRomaneio } from '@/services/romaneios'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
@@ -19,10 +19,8 @@ import {
 
 export default function RotaDetail() {
   const { rota } = useParams<{ rota: string }>()
-  const navigate = useNavigate()
   const { toast } = useToast()
   const rotaDecoded = decodeURIComponent(rota || '') as RotaType
-  const rotaConfig = ROTAS.find((r) => r.name === rotaDecoded)
 
   const [romaneios, setRomaneios] = useState<Romaneio[]>([])
   const [itens, setItens] = useState<RomaneioItem[]>([])
@@ -30,7 +28,6 @@ export default function RotaDetail() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id?: string }>({ open: false })
 
   const loadData = async () => {
-    if (!rotaConfig) return
     try {
       const list = await getRomaneiosByRota(rotaDecoded)
       setRomaneios(list)
@@ -42,19 +39,11 @@ export default function RotaDetail() {
   }
 
   useEffect(() => {
-    if (!rotaConfig) {
-      navigate('/')
-      return
-    }
     loadData()
   }, [rotaDecoded])
 
   useRealtime('romaneios', () => loadData())
   useRealtime('romaneio_itens', () => loadData())
-
-  if (!rotaConfig) {
-    return null
-  }
 
   const handleDelete = async () => {
     if (!deleteDialog.id) return

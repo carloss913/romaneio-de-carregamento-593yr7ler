@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider } from '@/hooks/use-auth'
+import { RotasProvider } from '@/hooks/use-rotas'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import Layout from './components/Layout'
 
@@ -11,6 +12,7 @@ import RotaDetail from './pages/RotaDetail'
 import RomaneioDetail from './pages/RomaneioDetail'
 import Produtos from './pages/Produtos'
 import Contato from './pages/Contato'
+import Rotas from './pages/Rotas'
 import Login from './pages/Login'
 import RomaneioView from './pages/RomaneioView'
 import NotFound from './pages/NotFound'
@@ -18,30 +20,33 @@ import NotFound from './pages/NotFound'
 const App = () => (
   <BrowserRouter>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/romaneios/:id" element={<RomaneioView />} />
+      <RotasProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/romaneios/:id" element={<RomaneioView />} />
 
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={<Index />} />
-            <Route path="/rotas/:rota" element={<RotaDetail />} />
-            <Route path="/admin/romaneios/:id" element={<RomaneioDetail />} />
-            <Route path="/produtos" element={<Produtos />} />
-            <Route path="/contato" element={<Contato />} />
-          </Route>
+            <Route
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/" element={<Index />} />
+              <Route path="/rotas" element={<Rotas />} />
+              <Route path="/rotas/:rota" element={<RotaDetail />} />
+              <Route path="/admin/romaneios/:id" element={<RomaneioDetail />} />
+              <Route path="/produtos" element={<Produtos />} />
+              <Route path="/contato" element={<Contato />} />
+            </Route>
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </TooltipProvider>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </TooltipProvider>
+      </RotasProvider>
     </AuthProvider>
   </BrowserRouter>
 )

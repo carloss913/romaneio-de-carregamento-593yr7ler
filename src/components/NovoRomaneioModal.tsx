@@ -18,9 +18,10 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { RotaType, ROTAS } from '@/types/database'
+import { RotaType } from '@/types/database'
 import { createRomaneio } from '@/services/romaneios'
 import { useToast } from '@/hooks/use-toast'
+import { useRotas } from '@/hooks/use-rotas'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 interface NovoRomaneioModalProps {
@@ -32,8 +33,9 @@ interface NovoRomaneioModalProps {
 export function NovoRomaneioModal({ open, onOpenChange, defaultRota }: NovoRomaneioModalProps) {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { rotas } = useRotas()
   const [loading, setLoading] = useState(false)
-  const [rota, setRota] = useState<RotaType>(defaultRota || 'Piçarra')
+  const [rota, setRota] = useState<RotaType>(defaultRota || '')
   const [data, setData] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
@@ -44,6 +46,10 @@ export function NovoRomaneioModal({ open, onOpenChange, defaultRota }: NovoRoman
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!rota) {
+      toast({ title: 'Selecione uma rota', variant: 'destructive' })
+      return
+    }
     setLoading(true)
     try {
       const romaneio = await createRomaneio({
@@ -80,17 +86,19 @@ export function NovoRomaneioModal({ open, onOpenChange, defaultRota }: NovoRoman
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent>
-                {ROTAS.map((r) => (
-                  <SelectItem key={r.name} value={r.name}>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: r.color }}
-                      />
-                      <span>{r.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {rotas
+                  .filter((r) => r.ativa)
+                  .map((r) => (
+                    <SelectItem key={r.id} value={r.nome}>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: r.cor || '#78716c' }}
+                        />
+                        <span>{r.nome}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

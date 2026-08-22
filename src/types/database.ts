@@ -1,6 +1,13 @@
 import { RecordModel } from 'pocketbase'
 
-export type RotaType = 'Piçarra' | 'SFX' | 'Tucumã' | 'Floresta' | 'Outros'
+export type RotaType = string
+
+export interface Rota extends RecordModel {
+  nome: string
+  cor?: string
+  ativa: boolean
+  ordem?: number
+}
 
 export interface Produto extends RecordModel {
   codigo: string
@@ -52,41 +59,24 @@ export function getSecaoOrder(secao?: string): number {
   return SECAO_ORDER[secao || ''] ?? 99
 }
 
-export const ROTAS: { name: RotaType; color: string; bg: string; border: string; text: string }[] =
-  [
-    {
-      name: 'Piçarra',
-      color: '#78716c',
-      bg: 'bg-stone-500/10',
-      border: 'border-stone-500',
-      text: 'text-stone-700',
-    },
-    {
-      name: 'SFX',
-      color: '#3b82f6',
-      bg: 'bg-blue-500/10',
-      border: 'border-blue-500',
-      text: 'text-blue-700',
-    },
-    {
-      name: 'Tucumã',
-      color: '#22c55e',
-      bg: 'bg-green-500/10',
-      border: 'border-green-500',
-      text: 'text-green-700',
-    },
-    {
-      name: 'Floresta',
-      color: '#059669',
-      bg: 'bg-emerald-500/10',
-      border: 'border-emerald-500',
-      text: 'text-emerald-700',
-    },
-    {
-      name: 'Outros',
-      color: '#a855f7',
-      bg: 'bg-purple-500/10',
-      border: 'border-purple-500',
-      text: 'text-purple-700',
-    },
-  ]
+const ROTAS_COLOR_PALETTE = [
+  '#78716c',
+  '#3b82f6',
+  '#22c55e',
+  '#059669',
+  '#a855f7',
+  '#f59e0b',
+  '#0ea5e9',
+  '#ec4899',
+  '#dc2626',
+  '#14b8a6',
+]
+
+export function stringToColor(str: string): string {
+  if (!str) return '#78716c'
+  let h = 0
+  for (let i = 0; i < str.length; i++) {
+    h = str.charCodeAt(i) + ((h << 5) - h)
+  }
+  return ROTAS_COLOR_PALETTE[Math.abs(h) % ROTAS_COLOR_PALETTE.length]
+}

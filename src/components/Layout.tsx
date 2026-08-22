@@ -1,8 +1,19 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { Truck, Home, Package, Menu, X, LogOut, ChevronRight, Plus, Phone } from 'lucide-react'
+import {
+  Truck,
+  Home,
+  Package,
+  Menu,
+  X,
+  LogOut,
+  ChevronRight,
+  Plus,
+  Phone,
+  MapPin,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { ROTAS } from '@/types/database'
+import { useRotas } from '@/hooks/use-rotas'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,6 +31,7 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [logoutModalOpen, setLogoutModalOpen] = useState(false)
   const [novoRomaneioOpen, setNovoRomaneioOpen] = useState(false)
+  const { rotas } = useRotas()
 
   const handleLogout = () => {
     signOut()
@@ -92,28 +104,33 @@ export default function Layout() {
           <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
             Rotas Ativas
           </p>
-          {ROTAS.map((r) => {
-            const path = `/rotas/${encodeURIComponent(r.name)}`
-            const isActive = location.pathname === path
-            return (
-              <Link
-                key={r.name}
-                to={path}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-slate-800 text-white font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color }} />
-                  <span>{r.name}</span>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-              </Link>
-            )
-          })}
+          {rotas
+            .filter((r) => r.ativa)
+            .map((r) => {
+              const path = `/rotas/${encodeURIComponent(r.nome)}`
+              const isActive = location.pathname === path
+              return (
+                <Link
+                  key={r.id}
+                  to={path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                    isActive
+                      ? 'bg-slate-800 text-white font-semibold'
+                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: r.cor || '#78716c' }}
+                    />
+                    <span>{r.nome}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                </Link>
+              )
+            })}
         </div>
 
         {/* Quick Action in Sidebar */}

@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Truck, ChevronRight, FileText, Scale, CheckCircle2, Package, Plus } from 'lucide-react'
-import { ROTAS, Romaneio, RomaneioItem } from '@/types/database'
+import { Romaneio, RomaneioItem } from '@/types/database'
 import { getRomaneios } from '@/services/romaneios'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { NovoRomaneioModal } from '@/components/NovoRomaneioModal'
 import { useRealtime } from '@/hooks/use-realtime'
+import { useRotas } from '@/hooks/use-rotas'
 
 export default function Index() {
+  const { rotas } = useRotas()
   const [romaneios, setRomaneios] = useState<Romaneio[]>([])
   const [itens, setItens] = useState<RomaneioItem[]>([])
   const [novoModalOpen, setNovoModalOpen] = useState(false)
@@ -66,56 +68,58 @@ export default function Index() {
         </Button>
       </div>
 
-      {/* 5 Primary Route Cards Grid (Mandatory Order: Piçarra, SFX, Tucumã, Floresta, Outros) */}
+      {/* Route Cards Grid (dynamic from the rotas collection) */}
       <div className="space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
           Rotas de Carregamento
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {ROTAS.map((r, idx) => {
-            const romsDaRota = romaneiosHoje.filter((rom) => rom.rota === r.name)
-            const kgDaRota = itens
-              .filter((i) => romsDaRota.some((rom) => rom.id === i.romaneio))
-              .reduce((acc, i) => acc + i.peso_total_kg, 0)
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {rotas
+            .filter((r) => r.ativa)
+            .map((r) => {
+              const romsDaRota = romaneiosHoje.filter((rom) => rom.rota === r.nome)
+              const kgDaRota = itens
+                .filter((i) => romsDaRota.some((rom) => rom.id === i.romaneio))
+                .reduce((acc, i) => acc + i.peso_total_kg, 0)
 
-            return (
-              <Link
-                key={r.name}
-                to={`/rotas/${encodeURIComponent(r.name)}`}
-                className="group relative bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between overflow-hidden"
-              >
-                {/* Top Accent Line */}
-                <div
-                  className="absolute top-0 left-0 right-0 h-1.5 transition-all group-hover:h-2"
-                  style={{ backgroundColor: r.color }}
-                />
+              return (
+                <Link
+                  key={r.id}
+                  to={`/rotas/${encodeURIComponent(r.nome)}`}
+                  className="group relative bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between overflow-hidden"
+                >
+                  {/* Top Accent Line */}
+                  <div
+                    className="absolute top-0 left-0 right-0 h-1.5 transition-all group-hover:h-2"
+                    style={{ backgroundColor: r.cor || '#78716c' }}
+                  />
 
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-sm"
-                      style={{ backgroundColor: r.color }}
-                    >
-                      <Truck className="w-5 h-5" />
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-sm"
+                        style={{ backgroundColor: r.cor || '#78716c' }}
+                      >
+                        <Truck className="w-5 h-5" />
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-700 group-hover:translate-x-1 transition-all" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-700 group-hover:translate-x-1 transition-all" />
+
+                    <h3 className="text-lg font-black text-slate-800 tracking-tight">{r.nome}</h3>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      {romsDaRota.length} {romsDaRota.length === 1 ? 'romaneio' : 'romaneios'} hoje
+                    </p>
                   </div>
 
-                  <h3 className="text-lg font-black text-slate-800 tracking-tight">{r.name}</h3>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {romsDaRota.length} {romsDaRota.length === 1 ? 'romaneio' : 'romaneios'} hoje
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-400">Carga total:</span>
-                  <span className="text-sm font-bold text-slate-800 tabular-nums">
-                    {kgDaRota.toFixed(1)} kg
-                  </span>
-                </div>
-              </Link>
-            )
-          })}
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-400">Carga total:</span>
+                    <span className="text-sm font-bold text-slate-800 tabular-nums">
+                      {kgDaRota.toFixed(1)} kg
+                    </span>
+                  </div>
+                </Link>
+              )
+            })}
         </div>
       </div>
 
