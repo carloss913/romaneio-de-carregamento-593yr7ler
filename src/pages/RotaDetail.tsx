@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
 import { RotaType, Romaneio, RomaneioItem } from '@/types/database'
 import { getRomaneiosByRota, deleteRomaneio } from '@/services/romaneios'
+import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,13 @@ export default function RotaDetail() {
   }
 
   useEffect(() => {
+    // Dispara a rotina de exclusão automática (fire-and-forget) e
+    // recarrega a lista caso algo tenha sido removido.
+    runAutoDelete()
+      .then((excluidos) => {
+        if (excluidos > 0) loadData()
+      })
+      .catch(() => {})
     loadData()
   }, [rotaDecoded])
 

@@ -11,6 +11,7 @@ import {
   Plus,
   Phone,
   MapPin,
+  Settings,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useRotas } from '@/hooks/use-rotas'
@@ -109,6 +110,19 @@ export default function Layout() {
           >
             <Phone className="w-4 h-4" />
             <span>Contato</span>
+          </Link>
+
+          <Link
+            to="/configuracoes"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              location.pathname === '/configuracoes'
+                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Configurações</span>
           </Link>
         </div>
 

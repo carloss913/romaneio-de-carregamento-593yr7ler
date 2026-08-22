@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Truck, ChevronRight, FileText, Scale, CheckCircle2, Package, Plus } from 'lucide-react'
 import { Romaneio, RomaneioItem } from '@/types/database'
 import { getRomaneios } from '@/services/romaneios'
+import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,14 @@ export default function Index() {
   }
 
   useEffect(() => {
+    // Dispara a rotina de exclusão automática de romaneios finalizados
+    // antigos conforme o prazo configurado em "Configurações". É fire-and-forget:
+    // recarrega a lista em seguida para refletir eventuais remoções.
+    runAutoDelete()
+      .then((excluidos) => {
+        if (excluidos > 0) loadData()
+      })
+      .catch(() => {})
     loadData()
   }, [])
 

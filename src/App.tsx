@@ -13,6 +13,7 @@ import RomaneioDetail from './pages/RomaneioDetail'
 import Produtos from './pages/Produtos'
 import Contato from './pages/Contato'
 import Rotas from './pages/Rotas'
+import Configuracoes from './pages/Configuracoes'
 import Login from './pages/Login'
 import RomaneioView from './pages/RomaneioView'
 import NotFound from './pages/NotFound'
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="/admin/romaneios/:id" element={<RomaneioDetail />} />
               <Route path="/produtos" element={<Produtos />} />
               <Route path="/contato" element={<Contato />} />
+              <Route path="/configuracoes" element={<Configuracoes />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
