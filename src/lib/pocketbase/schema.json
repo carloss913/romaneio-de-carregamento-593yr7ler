@@ -137,10 +137,9 @@
       "fields": [
         {
           "name": "rota",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": ["Piçarra", "SFX", "Tucumã", "Floresta", "Outros"]
+          "type": "text",
+          "required": false,
+          "system": false
         },
         {
           "name": "data",
