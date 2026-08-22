@@ -1,24 +1,29 @@
 migrate(
   (app) => {
-    const collection = new Collection({
-      name: 'rotas',
-      type: 'base',
-      listRule: '',
-      viewRule: '',
-      createRule: "@request.auth.id != ''",
-      updateRule: "@request.auth.id != ''",
-      deleteRule: "@request.auth.id != ''",
-      fields: [
-        { name: 'nome', type: 'text', required: true },
-        { name: 'cor', type: 'text' },
-        { name: 'ativa', type: 'bool' },
-        { name: 'ordem', type: 'number' },
-        { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
-        { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
-      ],
-      indexes: ["CREATE UNIQUE INDEX idx_rotas_nome ON rotas (nome) WHERE nome != ''"],
-    })
-    app.save(collection)
+    // Idempotent: create the `rotas` collection only if it doesn't already exist
+    // (handles the case where a prior partial apply created the table but failed
+    // before seeding, or where the collection was created out of band).
+    if (!app.hasTable('rotas')) {
+      const collection = new Collection({
+        name: 'rotas',
+        type: 'base',
+        listRule: '',
+        viewRule: '',
+        createRule: "@request.auth.id != ''",
+        updateRule: "@request.auth.id != ''",
+        deleteRule: "@request.auth.id != ''",
+        fields: [
+          { name: 'nome', type: 'text', required: true },
+          { name: 'cor', type: 'text' },
+          { name: 'ativa', type: 'bool' },
+          { name: 'ordem', type: 'number' },
+          { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+          { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
+        ],
+        indexes: ["CREATE UNIQUE INDEX idx_rotas_nome ON rotas (nome) WHERE nome != ''"],
+      })
+      app.save(collection)
+    }
 
     const rotasCol = app.findCollectionByNameOrId('rotas')
     const seeds = [

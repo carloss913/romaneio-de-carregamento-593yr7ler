@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-22T16:56:52.207Z",
+  "generatedAt": "2026-08-22T17:11:15.547Z",
   "collections": [
     {
       "name": "users",
@@ -314,6 +314,58 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "rotas",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativa",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_rotas_nome ON rotas (nome) WHERE nome != ''"]
     }
   ]
 }
