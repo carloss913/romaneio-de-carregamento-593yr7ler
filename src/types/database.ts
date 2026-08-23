@@ -55,8 +55,28 @@ export const SECAO_ORDER: Record<string, number> = {
   RESFRIADO: 2,
 }
 
+export function normalizeSecao(
+  val?: string | null,
+): 'CONGELADO' | 'GERAL' | 'RESFRIADO' | undefined {
+  if (!val) return undefined
+  // Remove non-breaking spaces and invisible characters, trim and uppercase
+  const cleaned = val
+    .replace(/[\u00A0\u1680\u180e\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/g, ' ')
+    .trim()
+    .toUpperCase()
+  if (cleaned === 'CONGELADO' || cleaned === 'GERAL' || cleaned === 'RESFRIADO') {
+    return cleaned
+  }
+  // Try matching substring or common variants if necessary
+  if (cleaned.includes('CONGELAD')) return 'CONGELADO'
+  if (cleaned.includes('RESFRIAD')) return 'RESFRIADO'
+  if (cleaned.includes('GERAL')) return 'GERAL'
+  return undefined
+}
+
 export function getSecaoOrder(secao?: string): number {
-  return SECAO_ORDER[(secao || '').trim().toUpperCase()] ?? 99
+  const norm = normalizeSecao(secao)
+  return norm ? (SECAO_ORDER[norm] ?? 99) : 99
 }
 
 const ROTAS_COLOR_PALETTE = [

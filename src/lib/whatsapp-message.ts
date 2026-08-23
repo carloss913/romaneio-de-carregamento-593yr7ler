@@ -3,7 +3,7 @@ import { Romaneio, RomaneioItem } from '@/types/database'
 export function buildWhatsAppMessage(
   romaneio: Romaneio,
   itens: RomaneioItem[],
-  options: { carregadoCount?: number; statusText?: string } = {},
+  options: { carregadoCount?: number; statusText?: string; conferente?: string } = {},
 ): string {
   const statusText =
     options.statusText || (romaneio.status === 'finalizado' ? 'Finalizado' : 'Em Andamento')
@@ -11,6 +11,9 @@ export function buildWhatsAppMessage(
   const totalPeso = itens.reduce((acc, i) => acc + i.peso_total_kg, 0)
 
   let msg = `*Conclusão de Carregamento*\n\n`
+  if (options.conferente && options.conferente.trim().length > 0) {
+    msg += `Conferente: ${options.conferente.trim()}\n`
+  }
   msg += `Romaneio: #${romaneio.id.slice(-4).toUpperCase()}\n`
   msg += `Rota: ${romaneio.rota}\n`
   msg += `Data: ${new Date(romaneio.data).toLocaleDateString('pt-BR')}\n`

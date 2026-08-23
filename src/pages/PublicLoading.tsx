@@ -26,6 +26,8 @@ import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
@@ -54,6 +56,9 @@ export default function PublicLoading() {
   const [obsText, setObsText] = useState('')
   const [loading, setLoading] = useState(true)
   const [finalizing, setFinalizing] = useState(false)
+  const [conferenteModalOpen, setConferenteModalOpen] = useState(false)
+  const [nomeConferente, setNomeConferente] = useState('')
+  const [conferenteError, setConferenteError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const refreshingRef = useRef(false)
   const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
@@ -205,7 +210,7 @@ export default function PublicLoading() {
     }
   }
 
-  const sendWhatsAppConclusion = (forceStatus?: string) => {
+  const sendWhatsAppConclusion = (forceStatus?: string, conferenteNome?: string) => {
     const phone = configPhone.replace(/\D/g, '')
     if (!phone) {
       toast({
@@ -220,18 +225,30 @@ export default function PublicLoading() {
     const msg = buildWhatsAppMessage(romaneio, itens, {
       statusText,
       carregadoCount,
+      conferente: conferenteNome !== undefined ? conferenteNome : nomeConferente,
     })
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
-  const handleFinalize = async () => {
+  const handleOpenFinalizeModal = () => {
+    setConferenteError('')
+    setConferenteModalOpen(true)
+  }
+
+  const handleConfirmFinalize = async () => {
+    const trimmed = nomeConferente.trim()
+    if (!trimmed) {
+      setConferenteError('O nome do conferente é obrigatório.')
+      return
+    }
     setFinalizing(true)
     try {
       await updateRomaneio(romaneio.id, { status: 'finalizado' })
       setRomaneio((prev) => (prev ? { ...prev, status: 'finalizado' } : prev))
       toast({ title: 'Carregamento finalizado!' })
+      setConferenteModalOpen(false)
       loadData()
-      sendWhatsAppConclusion('finalizado')
+      sendWhatsAppConclusion('finalizado', trimmed)
     } catch {
       toast({ title: 'Erro ao finalizar', variant: 'destructive' })
     } finally {
@@ -571,7 +588,7 @@ export default function PublicLoading() {
         <div className="flex flex-col sm:flex-row gap-3">
           {!isFinalizado ? (
             <Button
-              onClick={handleFinalize}
+              onClick={handleOpenFinalizeModal}
               disabled={finalizing}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-12"
             >
@@ -596,6 +613,78 @@ export default function PublicLoading() {
           </Button>
         </div>
       </main>
+
+      {/* Modal Nome do Conferente */}
+      <Dialog
+        open={conferenteModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConferenteModalOpen(false)
+            setConferenteError('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              Finalizar Carregamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-slate-600">
+              Informe o <strong>nome do conferente</strong> responsável pela carga para concluir e
+              gerar o relatório no WhatsApp:
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="nomeConferenteInput">
+                Nome do Conferente <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="nomeConferenteInput"
+                value={nomeConferente}
+                onChange={(e) => {
+                  setNomeConferente(e.target.value)
+                  if (e.target.value.trim()) setConferenteError('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleConfirmFinalize()
+                  }
+                }}
+                placeholder="Ex: João Silva"
+                autoFocus
+                className={conferenteError ? 'border-red-500' : ''}
+              />
+              {conferenteError && (
+                <p className="text-xs text-red-600 font-medium">{conferenteError}</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setConferenteModalOpen(false)
+                setConferenteError('')
+              }}
+              disabled={finalizing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmFinalize}
+              disabled={finalizing || !nomeConferente.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {finalizing ? 'Finalizando...' : 'Confirmar e Finalizar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editingItemObs} onOpenChange={(v) => !v && setEditingItemObs(null)}>
         <DialogContent className="sm:max-w-[420px]">

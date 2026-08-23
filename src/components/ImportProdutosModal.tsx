@@ -26,7 +26,7 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table'
-import { Produto } from '@/types/database'
+import { Produto, normalizeSecao } from '@/types/database'
 import { getProdutos, createProduto, updateProduto } from '@/services/produtos'
 import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
 import {
@@ -137,7 +137,9 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
 
           if (mappings.codigo && r.codigo.trim()) updateData.codigo = r.codigo
           if (mappings.nome && r.nome.trim()) updateData.nome = r.nome
-          if (mappings.secao && r.secao.trim()) updateData.secao = r.secao.trim()
+          if (mappings.secao && r.secao.trim()) {
+            updateData.secao = normalizeSecao(r.secao) || r.secao.trim().toUpperCase()
+          }
           if (mappings.peso_caixa_kg && r.peso_caixa_kg.trim()) {
             updateData.peso_caixa_kg = num(r.peso_caixa_kg)
           }
@@ -159,10 +161,11 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
           } else if (pp > 0 && pc > 0) {
             pecasPorCaixa = Math.round(pc / pp)
           }
+          const normSecao = normalizeSecao(r.secao)
           const data = {
             codigo: r.codigo,
             nome: r.nome,
-            secao: r.secao.trim() || undefined,
+            secao: normSecao,
             peso_caixa_kg: pc,
             peso_peca_kg: pp,
             pecas_por_caixa: pecasPorCaixa,

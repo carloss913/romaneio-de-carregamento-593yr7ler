@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-22T19:35:50.574Z",
+  "generatedAt": "2026-08-23T02:48:54.461Z",
   "collections": [
     {
       "name": "users",
@@ -136,13 +136,6 @@
       },
       "fields": [
         {
-          "name": "rota",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": ["Piçarra", "SFX", "Tucumã", "Floresta", "Outros"]
-        },
-        {
           "name": "data",
           "type": "date",
           "required": true,
@@ -180,12 +173,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "rota",
+          "type": "text",
+          "required": true,
+          "system": false
         }
       ],
       "indexes": [
-        "CREATE INDEX idx_romaneios_rota ON romaneios (rota)",
         "CREATE INDEX idx_romaneios_data ON romaneios (data)",
-        "CREATE INDEX idx_romaneios_status ON romaneios (status)"
+        "CREATE INDEX idx_romaneios_status ON romaneios (status)",
+        "CREATE INDEX `idx_romaneios_rota` ON `romaneios` (rota)"
       ]
     },
     {

@@ -37,7 +37,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Produto, RomaneioItem } from '@/types/database'
+import { Produto, RomaneioItem, normalizeSecao } from '@/types/database'
 import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
 import { convertWeightToBoxesAndPieces, parseBrazilianWeight } from '@/lib/conversion'
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
@@ -208,7 +208,8 @@ export function ImportWizardModal({
       const weight = parseBrazilianWeight(weightRaw)
       const marcaVal = colMarca ? (row[colMarca] || '').trim() : ''
       const nomeVal = colNome ? (row[colNome] || '').trim() : ''
-      const secaoVal = colSecao ? (row[colSecao] || '').trim() : ''
+      const rawSecao = colSecao ? (row[colSecao] || '').trim() : ''
+      const secaoVal = normalizeSecao(rawSecao) || rawSecao
       if (aggregated[code]) {
         aggregated[code].pesoTotal += weight
         if (marcaVal && !aggregated[code].marca) {
@@ -351,11 +352,21 @@ export function ImportWizardModal({
         if (row.marca && row.matchedProduto.marca !== row.marca) {
           updates.marca = row.marca
         }
-        if (row.secao && row.matchedProduto.secao !== row.secao) {
-          updates.secao = row.secao
+        const normSecao = normalizeSecao(row.secao)
+        if (normSecao && row.matchedProduto.secao !== normSecao) {
+          updates.secao = normSecao
         }
         if (Object.keys(updates).length > 0) {
-          await updateProduto(row.matchedProduto.id, updates).catch(() => {})
+          try {
+            await updateProduto(row.matchedProduto.id, updates)
+          } catch (updateErr) {
+            console.warn('Aviso ao atualizar produto existente:', updateErr)
+            toast({
+              title: `Aviso ao atualizar produto ${row.matchedProduto.codigo || row.matchedProduto.nome}`,
+              description: getErrorMessage(updateErr),
+              variant: 'destructive',
+            })
+          }
         }
         await createRomaneioItem({
           romaneio: romaneioId,
@@ -370,11 +381,12 @@ export function ImportWizardModal({
       }
 
       for (const row of toAutoCreate) {
+        const normSecao = normalizeSecao(row.secao)
         const novoProduto = await createProduto({
           codigo: row.rawCode,
           nome: row.nomeFromSheet || row.rawCode,
           marca: row.marca || '',
-          secao: row.secao || undefined,
+          secao: normSecao,
           ativo: true,
         })
         await createRomaneioItem({
