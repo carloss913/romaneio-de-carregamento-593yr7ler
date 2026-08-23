@@ -357,6 +357,7 @@ export default function RomaneioDetail() {
   }
 
   const handleUpdateSecao = async (produtoId: string, novaSecao: string) => {
+    const scrollY = window.scrollY
     const prevProdutos = produtos
     const prevItens = itens
     const previousProduto = produtos.find((p) => p.id === produtoId)
@@ -386,6 +387,12 @@ export default function RomaneioDetail() {
         return item
       }),
     )
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY)
+      })
+    })
 
     // 2. Mutação em background sem disparar loadData() completo
     try {
