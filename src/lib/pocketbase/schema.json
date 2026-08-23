@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-23T03:23:05.309Z",
+  "generatedAt": "2026-08-23T03:28:26.190Z",
   "collections": [
     {
       "name": "users",
@@ -178,6 +178,12 @@
           "name": "rota",
           "type": "text",
           "required": true,
+          "system": false
+        },
+        {
+          "name": "conferente",
+          "type": "text",
+          "required": false,
           "system": false
         }
       ],

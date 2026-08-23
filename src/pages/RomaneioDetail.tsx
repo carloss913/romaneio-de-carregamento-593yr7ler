@@ -17,6 +17,7 @@ import {
   X,
   Pencil,
   RefreshCw,
+  UserCheck,
 } from 'lucide-react'
 import { Romaneio, RomaneioItem, Produto, getSecaoOrder } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
@@ -187,6 +188,7 @@ export default function RomaneioDetail() {
   const handleToggleStatus = async () => {
     const nextStatus = isFinalizado ? 'em_andamento' : 'finalizado'
     try {
+      // If reopening, we keep the conferente or can leave it as is; if finalizing manually in admin without conferente, just update status
       await updateRomaneio(romaneio.id, { status: nextStatus })
       toast({
         title: isFinalizado ? 'Romaneio Reaberto' : 'Romaneio Finalizado',
@@ -286,6 +288,7 @@ export default function RomaneioDetail() {
     }
     const msg = buildWhatsAppMessage(romaneio, itens, {
       statusText: isFinalizado ? 'Finalizado' : 'Em Andamento',
+      conferente: romaneio.conferente,
     })
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
@@ -346,9 +349,19 @@ export default function RomaneioDetail() {
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Aberto em {new Date(romaneio.created).toLocaleString('pt-BR')} • {itens.length}{' '}
-                produtos carregados
+              <p className="text-xs text-slate-500 font-medium mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>Aberto em {new Date(romaneio.created).toLocaleString('pt-BR')}</span>
+                <span>•</span>
+                <span>{itens.length} produtos carregados</span>
+                {isFinalizado && romaneio.conferente && (
+                  <>
+                    <span>•</span>
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      Conferente: {romaneio.conferente}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -541,12 +554,20 @@ export default function RomaneioDetail() {
 
         {/* Items Table */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base font-bold text-slate-800">Itens do Manifesto de Carga</h2>
             {isFinalizado && (
-              <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5" /> Romaneio finalizado (modo leitura)
-              </span>
+              <div className="flex items-center gap-3">
+                {romaneio.conferente && (
+                  <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" /> Conferente:{' '}
+                    {romaneio.conferente}
+                  </span>
+                )}
+                <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5" /> Romaneio finalizado (modo leitura)
+                </span>
+              </div>
             )}
           </div>
 

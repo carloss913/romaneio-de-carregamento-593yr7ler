@@ -81,6 +81,9 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
       {/* Signatures */}
       <div className="grid grid-cols-2 gap-12 mt-16 text-center text-xs">
         <div>
+          {romaneio.conferente ? (
+            <p className="font-bold text-slate-800 mb-1">{romaneio.conferente}</p>
+          ) : null}
           <div className="border-t border-slate-800 pt-2 font-semibold">Conferente Responsável</div>
           <p className="text-slate-400 mt-1">Assinatura e Carimbo</p>
         </div>

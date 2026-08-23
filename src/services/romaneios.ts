@@ -21,6 +21,7 @@ export const createRomaneio = (data: {
   status?: 'em_andamento' | 'finalizado'
   observacoes?: string
   arquivo_planilha?: File
+  conferente?: string
 }) => {
   const formData = new FormData()
   formData.append('rota', data.rota)
@@ -28,6 +29,7 @@ export const createRomaneio = (data: {
   formData.append('status', data.status || 'em_andamento')
   if (data.observacoes) formData.append('observacoes', data.observacoes)
   if (data.arquivo_planilha) formData.append('arquivo_planilha', data.arquivo_planilha)
+  if (data.conferente !== undefined) formData.append('conferente', data.conferente)
 
   return pb.collection('romaneios').create<Romaneio>(formData)
 }
@@ -40,6 +42,7 @@ export const updateRomaneio = (
     status: 'em_andamento' | 'finalizado'
     observacoes: string
     arquivo_planilha: File
+    conferente: string
   }>,
 ) => {
   const formData = new FormData()
@@ -48,6 +51,7 @@ export const updateRomaneio = (
   if (data.status) formData.append('status', data.status)
   if (data.observacoes !== undefined) formData.append('observacoes', data.observacoes)
   if (data.arquivo_planilha) formData.append('arquivo_planilha', data.arquivo_planilha)
+  if (data.conferente !== undefined) formData.append('conferente', data.conferente)
 
   return pb.collection('romaneios').update<Romaneio>(id, formData)
 }

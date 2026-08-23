@@ -26,6 +26,7 @@ export interface Romaneio extends RecordModel {
   status: 'em_andamento' | 'finalizado'
   observacoes?: string
   arquivo_planilha?: string
+  conferente?: string
 }
 
 export interface RomaneioItem extends RecordModel {

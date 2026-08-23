@@ -251,7 +251,8 @@ export default function PublicLoading() {
     const msg = buildWhatsAppMessage(romaneio, itens, {
       statusText,
       carregadoCount,
-      conferente: conferenteNome !== undefined ? conferenteNome : nomeConferente,
+      conferente:
+        conferenteNome !== undefined ? conferenteNome : romaneio?.conferente || nomeConferente,
     })
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
@@ -269,8 +270,8 @@ export default function PublicLoading() {
     }
     setFinalizing(true)
     try {
-      await updateRomaneio(romaneio.id, { status: 'finalizado' })
-      setRomaneio((prev) => (prev ? { ...prev, status: 'finalizado' } : prev))
+      await updateRomaneio(romaneio.id, { status: 'finalizado', conferente: trimmed })
+      setRomaneio((prev) => (prev ? { ...prev, status: 'finalizado', conferente: trimmed } : prev))
       pendingChangesRef.current.clear()
       toast({ title: 'Carregamento finalizado!' })
       setConferenteModalOpen(false)
@@ -332,6 +333,11 @@ export default function PublicLoading() {
                 Este romaneio foi finalizado. O link foi inativado e os itens estão bloqueados para
                 alterações.
               </p>
+              {romaneio.conferente && (
+                <p className="text-sm text-emerald-800 font-semibold mt-1">
+                  Conferente responsável: {romaneio.conferente}
+                </p>
+              )}
             </div>
           </div>
 
