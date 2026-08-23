@@ -36,8 +36,8 @@ export function convertWeightToBoxesAndPieces(
     }
   }
 
-  const caixas = Math.floor(pesoTotalKg / pc)
-  const restoKg = pesoTotalKg - caixas * pc
+  const caixas = Math.floor(pesoTotalKg / pc + 0.0001)
+  const restoKg = Math.max(0, Math.round((pesoTotalKg - caixas * pc) * 10000) / 10000)
 
   if (!hasPecaData(pesoPecaKg, pecasPorCaixa)) {
     const tolerance = Math.max(pc * 0.1, 0.5)
