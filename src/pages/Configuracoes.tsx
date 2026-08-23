@@ -72,7 +72,14 @@ export default function Configuracoes() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Prazo de exclusão</label>
-              <Select value={String(meses)} onValueChange={(v) => setMeses(Number(v))}>
+              <Select
+                value={String(meses)}
+                onValueChange={(v) => {
+                  const val = Number(v)
+                  setMeses(val)
+                  setAutoDeleteMonths(val)
+                }}
+              >
                 <SelectTrigger className="bg-white rounded-xl border-slate-200">
                   <SelectValue placeholder="Selecione o prazo" />
                 </SelectTrigger>
