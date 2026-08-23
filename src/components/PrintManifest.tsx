@@ -1,5 +1,4 @@
 import { Romaneio, RomaneioItem } from '@/types/database'
-import { RouteBadge } from './RouteBadge'
 import { formatBoxesAndPieces } from '@/lib/conversion'
 
 interface PrintManifestProps {
@@ -9,6 +8,8 @@ interface PrintManifestProps {
 
 export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
   const totalPeso = itens.reduce((acc, i) => acc + i.peso_total_kg, 0)
+  const totalCaixas = itens.reduce((acc, i) => acc + i.caixas, 0)
+  const totalPecas = itens.reduce((acc, i) => acc + i.pecas, 0)
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
@@ -18,80 +19,136 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
   }
 
   return (
-    <div className="hidden print:block p-8 bg-white text-black font-sans">
-      {/* Header */}
-      <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight uppercase">Romaneio de Carregamento</h1>
-          <p className="text-sm font-semibold text-slate-600">
-            Manifesto de Carga e Conferência de Frigorífico
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs uppercase font-bold text-slate-500">Rota de Entrega</p>
-          <div className="text-lg font-bold">
-            <RouteBadge rota={romaneio.rota} />
+    <div className="hidden print:block print-manifest-container text-black bg-white">
+      {/* Cabeçalho do Romaneio - Apenas na primeira página */}
+      <header className="print-header border-b border-black pb-1.5 mb-2">
+        <div className="flex justify-between items-start gap-2">
+          <div>
+            <h1 className="text-sm font-black tracking-tight uppercase leading-none">
+              Romaneio de Carregamento
+            </h1>
+            <p className="text-[9px] font-medium text-slate-700 mt-0.5 leading-tight">
+              Manifesto de Carga e Conferência • Romaneio #{romaneio.id.slice(-4).toUpperCase()}
+            </p>
           </div>
-          <p className="text-xs text-slate-600 mt-1">
-            Data: {new Date(romaneio.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-          </p>
+          <div className="text-right flex items-center gap-3">
+            <div className="text-right">
+              <span className="text-[9px] font-bold uppercase text-slate-600 block leading-none">
+                Rota
+              </span>
+              <span className="text-xs font-black uppercase text-black inline-block leading-tight">
+                {romaneio.rota}
+              </span>
+            </div>
+            <div className="text-right border-l border-slate-300 pl-2">
+              <span className="text-[9px] font-bold uppercase text-slate-600 block leading-none">
+                Data
+              </span>
+              <span className="text-xs font-bold text-black whitespace-nowrap leading-tight">
+                {new Date(romaneio.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {romaneio.observacoes && (
-        <div className="mb-6 p-3 border rounded bg-slate-50 text-xs">
-          <strong>Observações do Romaneio:</strong> {romaneio.observacoes}
-        </div>
-      )}
+        {romaneio.observacoes && (
+          <div className="mt-1 p-1 border border-slate-300 rounded bg-slate-50 text-[9px] leading-tight">
+            <strong className="font-bold">Obs:</strong> {romaneio.observacoes}
+          </div>
+        )}
+      </header>
 
-      {/* Table */}
-      <table className="w-full text-left border-collapse mb-8 text-sm">
-        <thead>
-          <tr className="border-b-2 border-slate-800">
-            <th className="py-2 text-center">✓</th>
-            <th className="py-2">Item / Produto</th>
-            <th className="py-2 text-right">Peso Total (kg)</th>
-            <th className="py-2 text-right">Quantidade</th>
+      {/* Tabela de Itens */}
+      <table className="w-full text-left border-collapse print-table text-[10px] leading-tight">
+        {/* thead com display: table-row-group para aparecer SOMENTE na 1ª página */}
+        <thead className="print-thead-single">
+          <tr className="border-b border-black font-bold text-[9px] uppercase bg-slate-100">
+            <th className="py-1 px-1 text-center w-6">✓</th>
+            <th className="py-1 px-1 w-14">Cód.</th>
+            <th className="py-1 px-1 w-20">Seção</th>
+            <th className="py-1 px-1">Descrição do Produto</th>
+            <th className="py-1 px-1 text-right w-20">Peso (kg)</th>
+            <th className="py-1 px-1 text-right w-24">Quantidade</th>
+            <th className="py-1 px-1 w-24">Obs.</th>
           </tr>
         </thead>
         <tbody>
-          {itens.map((item) => (
-            <tr key={item.id} className="border-b border-slate-200">
-              <td className="py-2 text-center">{item.carregado ? '✓' : ''}</td>
-              <td
-                className={`py-2 font-medium ${item.carregado ? 'line-through text-slate-400' : ''}`}
+          {itens.map((item, idx) => {
+            const prod = item.expand?.produto
+            const secao = prod?.secao || '-'
+            return (
+              <tr
+                key={item.id || idx}
+                className={`border-b border-slate-200 print-row ${
+                  idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'
+                }`}
               >
-                {item.expand?.produto?.nome || 'Produto'}
-              </td>
-              <td className="py-2 text-right tabular-nums">{item.peso_total_kg.toFixed(1)} kg</td>
-              <td className="py-2 text-right font-bold">{getItemQuantidade(item)}</td>
-            </tr>
-          ))}
+                <td className="py-0.5 px-1 text-center align-middle font-bold text-[9px]">
+                  {item.carregado ? '✓' : '□'}
+                </td>
+                <td className="py-0.5 px-1 text-slate-700 font-mono text-[9px] tabular-nums align-middle">
+                  {prod?.codigo || '-'}
+                </td>
+                <td className="py-0.5 px-1 text-slate-700 text-[9px] uppercase font-semibold align-middle truncate max-w-[80px]">
+                  {secao}
+                </td>
+                <td className="py-0.5 px-1 font-semibold text-black align-middle">
+                  <span>{prod?.nome || 'Produto'}</span>
+                  {prod?.marca ? (
+                    <span className="text-[9px] text-slate-600 font-normal ml-1">
+                      ({prod.marca})
+                    </span>
+                  ) : null}
+                </td>
+                <td className="py-0.5 px-1 text-right tabular-nums align-middle whitespace-nowrap">
+                  {item.peso_total_kg.toFixed(1)} kg
+                </td>
+                <td className="py-0.5 px-1 text-right font-bold text-black align-middle whitespace-nowrap">
+                  {getItemQuantidade(item)}
+                </td>
+                <td className="py-0.5 px-1 text-[8.5px] text-slate-600 align-middle truncate max-w-[100px]">
+                  {item.observacao || '-'}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
         <tfoot>
-          <tr className="border-t-2 border-slate-900 font-bold bg-slate-50">
-            <td className="py-3">TOTAL DA CARGA</td>
-            <td className="py-3 text-right tabular-nums">{totalPeso.toFixed(1)} kg</td>
-            <td className="py-3 text-right">{itens.length} produtos</td>
-            <td className="py-3 text-right"></td>
+          <tr className="border-t border-b border-black font-bold bg-slate-100 text-[9.5px] print-avoid-break">
+            <td colSpan={3} className="py-1 px-1 uppercase">
+              TOTAL: {itens.length} ITENS
+            </td>
+            <td className="py-1 px-1 text-right text-slate-700 text-[9px]">
+              {totalCaixas > 0 && `${totalCaixas} cx `}
+              {totalPecas > 0 && `${totalPecas} pct`}
+            </td>
+            <td className="py-1 px-1 text-right tabular-nums whitespace-nowrap">
+              {totalPeso.toFixed(1)} kg
+            </td>
+            <td colSpan={2} className="py-1 px-1 text-right"></td>
           </tr>
         </tfoot>
       </table>
 
-      {/* Signatures */}
-      <div className="grid grid-cols-2 gap-12 mt-16 text-center text-xs">
-        <div>
-          {romaneio.conferente ? (
-            <p className="font-bold text-slate-800 mb-1">{romaneio.conferente}</p>
-          ) : null}
-          <div className="border-t border-slate-800 pt-2 font-semibold">Conferente Responsável</div>
-          <p className="text-slate-400 mt-1">Assinatura e Carimbo</p>
-        </div>
-        <div>
-          <div className="border-t border-slate-800 pt-2 font-semibold">
-            Motorista / Transportador
+      {/* Bloco de Assinaturas e Rodapé */}
+      <div className="print-signatures mt-3 pt-2 text-center text-[9px] print-avoid-break">
+        <div className="grid grid-cols-2 gap-8">
+          <div>
+            <p className="font-bold text-slate-900 mb-0.5 min-h-[14px]">
+              {romaneio.conferente || ''}
+            </p>
+            <div className="border-t border-slate-700 pt-0.5 font-semibold">
+              Conferente Responsável
+            </div>
+            <p className="text-[8px] text-slate-500">Assinatura / Carimbo</p>
           </div>
-          <p className="text-slate-400 mt-1">Assinatura e RG</p>
+          <div>
+            <p className="font-bold text-slate-900 mb-0.5 min-h-[14px]">&nbsp;</p>
+            <div className="border-t border-slate-700 pt-0.5 font-semibold">
+              Motorista / Transportador
+            </div>
+            <p className="text-[8px] text-slate-500">Assinatura / RG</p>
+          </div>
         </div>
       </div>
     </div>

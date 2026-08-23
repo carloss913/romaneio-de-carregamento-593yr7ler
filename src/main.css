@@ -115,6 +115,80 @@
   }
 }
 
+@page {
+  size: A4 portrait;
+  margin: 6mm 6mm 6mm 6mm;
+}
+
+@media print {
+  html,
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Remover qualquer container que force quebras ou margens grandes */
+  .print-manifest-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 9.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  /* Não repetir cabeçalho do romaneio e títulos em páginas seguintes */
+  .print-header {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* thead com display: table-row-group para aparecer SOMENTE na 1ª página */
+  thead.print-thead-single {
+    display: table-row-group !important;
+  }
+
+  /* Tabela compacta */
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 4px !important;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding-top: 1.5px !important;
+    padding-bottom: 1.5px !important;
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+  }
+
+  /* Evitar corte no meio de uma linha da tabela */
+  .print-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Evitar que blocos finais quebrem sozinhos */
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-signatures {
+    margin-top: 8px !important;
+    padding-top: 4px !important;
+  }
+}
+
 @layer utilities {
   /* KEEP ALL THE ANIMATIONS CLASSES THAT ARE USED BELOW */
   @keyframes accordion-down {
