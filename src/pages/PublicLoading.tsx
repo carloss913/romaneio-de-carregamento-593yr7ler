@@ -77,8 +77,11 @@ export default function PublicLoading() {
       } catch {
         /* no config */
       }
-    } catch {
-      /* load failed */
+    } catch (err: any) {
+      if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
+        setRomaneio(null)
+        setItens([])
+      }
     }
     setLoading(false)
   }

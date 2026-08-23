@@ -38,11 +38,29 @@ export default function RotaDetail() {
         return
       }
       const filter = list.map((r) => `romaneio = "${r.id}"`).join(' || ')
-      const itensList = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
-        filter,
-      })
-      setItens(itensList)
-    } catch (err) {
+      try {
+        const itensList = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
+          filter,
+        })
+        setItens(itensList)
+      } catch (errItens: any) {
+        // Se falhar ao buscar itens (ex: 404 por romaneio sumido), tenta buscar romaneios atualizados
+        if (
+          errItens?.status === 404 ||
+          errItens?.response?.code === 404 ||
+          errItens?.message?.includes('404')
+        ) {
+          setItens([])
+        } else {
+          throw errItens
+        }
+      }
+    } catch (err: any) {
+      if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
+        setRomaneios([])
+        setItens([])
+        return
+      }
       toast.error('Erro ao carregar dados')
     }
   }, [rotaDecoded])

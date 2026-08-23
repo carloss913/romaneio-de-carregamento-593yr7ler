@@ -98,8 +98,10 @@ export default function RomaneioDetail() {
   const initialLoadDoneRef = useRef(false)
   const realtimeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const isDeletedRef = useRef(false)
+
   const loadData = useCallback(async () => {
-    if (!id) return
+    if (!id || isDeletedRef.current) return
     try {
       const rom = await getRomaneio(id)
       setRomaneio(rom)
@@ -115,10 +117,19 @@ export default function RomaneioDetail() {
       } catch {
         /* no config yet */
       }
-    } catch (err) {
+    } catch (err: any) {
+      // Se retornar 404 Not Found, o romaneio foi excluído
+      if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
+        if (!isDeletedRef.current) {
+          isDeletedRef.current = true
+          toast.error('Este romaneio foi excluído')
+          navigate('/', { replace: true })
+        }
+        return
+      }
       toast.error('Erro ao carregar dados')
     }
-  }, [id])
+  }, [id, navigate])
 
   const handleRefresh = useCallback(
     async (showToast = true) => {
@@ -149,24 +160,28 @@ export default function RomaneioDetail() {
   )
 
   const debouncedLoadData = useCallback(() => {
-    if (!initialLoadDoneRef.current) return
+    if (!initialLoadDoneRef.current || isDeletedRef.current) return
     if (realtimeDebounceTimerRef.current) {
       clearTimeout(realtimeDebounceTimerRef.current)
     }
     realtimeDebounceTimerRef.current = setTimeout(() => {
-      loadData()
+      if (!isDeletedRef.current) {
+        loadData()
+      }
     }, 500)
   }, [loadData])
 
   const debouncedHandleRefresh = useCallback(() => {
-    if (!initialLoadDoneRef.current) return
+    if (!initialLoadDoneRef.current || isDeletedRef.current) return
     // If the local user is currently updating a section in background, skip refreshing to avoid jumping scroll/full reload
     if (updatingSecaoProdId) return
     if (realtimeDebounceTimerRef.current) {
       clearTimeout(realtimeDebounceTimerRef.current)
     }
     realtimeDebounceTimerRef.current = setTimeout(() => {
-      handleRefresh(false)
+      if (!isDeletedRef.current) {
+        handleRefresh(false)
+      }
     }, 500)
   }, [handleRefresh, updatingSecaoProdId])
 

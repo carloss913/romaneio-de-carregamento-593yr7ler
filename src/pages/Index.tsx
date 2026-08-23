@@ -24,14 +24,31 @@ export default function Index() {
       setRomaneios(roms)
       if (roms.length > 0) {
         const filterStr = roms.map((r) => `romaneio="${r.id}"`).join(' || ')
-        const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
-          filter: filterStr,
-        })
-        setItens(relevantItens)
+        try {
+          const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
+            filter: filterStr,
+          })
+          setItens(relevantItens)
+        } catch (errItens: any) {
+          if (
+            errItens?.status === 404 ||
+            errItens?.response?.code === 404 ||
+            errItens?.message?.includes('404')
+          ) {
+            setItens([])
+          } else {
+            console.error('Erro ao carregar itens do painel:', errItens)
+          }
+        }
       } else {
         setItens([])
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
+        setRomaneios([])
+        setItens([])
+        return
+      }
       console.error('Erro ao carregar dados do painel:', err)
     }
   }, [])
