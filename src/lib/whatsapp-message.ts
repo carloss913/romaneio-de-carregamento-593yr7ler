@@ -29,11 +29,12 @@ export function buildWhatsAppMessage(
 
   if (itemsWithObs.length > 0) {
     msg += `\n*Observações dos Itens:*\n`
-    for (const item of itemsWithObs) {
+    const obsLines = itemsWithObs.map((item) => {
       const code = item.expand?.produto?.codigo || '-'
       const name = item.expand?.produto?.nome || 'Produto'
-      msg += `Código: ${code} — Produto: ${name} — Obs: ${item.observacao}\n`
-    }
+      return `- Código: ${code} — Produto: ${name} — Obs: ${item.observacao}`
+    })
+    msg += obsLines.join('\n\n') + '\n'
   }
 
   if (romaneio.observacoes && romaneio.observacoes.trim().length > 0) {
