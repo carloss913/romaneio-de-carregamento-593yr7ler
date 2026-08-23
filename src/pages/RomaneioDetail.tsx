@@ -19,7 +19,7 @@ import {
   RefreshCw,
   UserCheck,
 } from 'lucide-react'
-import { Romaneio, RomaneioItem, Produto, getSecaoOrder } from '@/types/database'
+import { Romaneio, RomaneioItem, Produto, getSecaoOrder, normalizeSecao } from '@/types/database'
 import { getRomaneio, updateRomaneio, deleteRomaneio } from '@/services/romaneios'
 import {
   getRomaneioItens,
@@ -27,7 +27,7 @@ import {
   updateRomaneioItem,
   deleteRomaneioItem,
 } from '@/services/romaneio_itens'
-import { getProdutos } from '@/services/produtos'
+import { getProdutos, updateProduto } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
 import { refreshRomaneioItens } from '@/services/romaneio_itens'
 import { convertWeightToBoxesAndPieces, formatBoxesAndPieces } from '@/lib/conversion'
@@ -42,6 +42,13 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -86,6 +93,7 @@ export default function RomaneioDetail() {
   const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const refreshingRef = useRef(false)
+  const [updatingSecaoProdId, setUpdatingSecaoProdId] = useState<string | null>(null)
 
   const initialLoadDoneRef = useRef(false)
   const realtimeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -343,6 +351,51 @@ export default function RomaneioDetail() {
       loadData()
     } catch {
       toast.error('Erro ao salvar observação')
+    }
+  }
+
+  const handleUpdateSecao = async (produtoId: string, novaSecao: string) => {
+    const secaoVal = novaSecao === '__NONE' || !novaSecao ? undefined : normalizeSecao(novaSecao)
+    setUpdatingSecaoProdId(produtoId)
+    try {
+      await updateProduto(produtoId, { secao: secaoVal })
+      setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, secao: secaoVal } : p)))
+      setItens((prev) =>
+        prev.map((item) => {
+          if (item.produto === produtoId && item.expand?.produto) {
+            return {
+              ...item,
+              expand: {
+                ...item.expand,
+                produto: {
+                  ...item.expand.produto,
+                  secao: secaoVal,
+                },
+              },
+            }
+          }
+          return item
+        }),
+      )
+      toast.success('Seção atualizada com sucesso!')
+    } catch (err) {
+      toast.error('Erro ao atualizar seção do produto')
+    } finally {
+      setUpdatingSecaoProdId(null)
+    }
+  }
+
+  const getSecaoBadgeClass = (secao?: string) => {
+    const norm = normalizeSecao(secao)
+    switch (norm) {
+      case 'CONGELADO':
+        return 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100 font-semibold text-xs'
+      case 'GERAL':
+        return 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 font-semibold text-xs'
+      case 'RESFRIADO':
+        return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 font-semibold text-xs'
+      default:
+        return 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 font-normal text-xs'
     }
   }
 
@@ -611,6 +664,7 @@ export default function RomaneioDetail() {
                 <TableRow>
                   <TableHead className="w-12 text-center">Carregado</TableHead>
                   <TableHead>Código</TableHead>
+                  <TableHead>Seção</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead>Marca</TableHead>
                   <TableHead className="text-right">Peso Total (kg)</TableHead>
@@ -620,71 +674,116 @@ export default function RomaneioDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedItens.map((item) => (
-                  <TableRow key={item.id} className={item.carregado ? 'opacity-50' : ''}>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center">
-                        <Checkbox
-                          checked={item.carregado}
-                          onCheckedChange={() => handleToggleCarregado(item)}
-                          disabled={isFinalizado}
-                          className={
-                            item.carregado ? 'border-emerald-500 bg-emerald-500 text-white' : ''
-                          }
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
-                      {item.expand?.produto?.codigo || '-'}
-                    </TableCell>
-                    <TableCell
-                      className={`font-bold text-slate-800 ${
-                        item.carregado ? 'line-through text-slate-400' : ''
-                      }`}
-                    >
-                      {item.expand?.produto?.nome || 'Produto'}
-                    </TableCell>
-                    <TableCell className="text-slate-600 text-sm">
-                      {item.expand?.produto?.marca || '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {item.peso_total_kg.toFixed(1)} kg
-                    </TableCell>
-                    <TableCell className="text-right font-black text-slate-900">
-                      {getItemQuantidade(item)}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500 max-w-[160px] truncate">
-                      {item.observacao || '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {!isFinalizado && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setEditingItemObs({ id: item.id, text: item.observacao || '' })
+                {sortedItens.map((item) => {
+                  const prod = item.expand?.produto
+                  const currentSecao = prod?.secao
+                  const displaySecao = currentSecao ? currentSecao : '—'
+
+                  return (
+                    <TableRow key={item.id} className={item.carregado ? 'opacity-50' : ''}>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center">
+                          <Checkbox
+                            checked={item.carregado}
+                            onCheckedChange={() => handleToggleCarregado(item)}
+                            disabled={isFinalizado}
+                            className={
+                              item.carregado ? 'border-emerald-500 bg-emerald-500 text-white' : ''
                             }
-                            className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-8 w-8"
-                            title="Editar observação do item"
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
+                        {prod?.codigo || '-'}
+                      </TableCell>
+                      <TableCell className="min-w-[130px]">
+                        {isFinalizado || !prod ? (
+                          <span
+                            className={
+                              currentSecao
+                                ? `inline-flex items-center px-2 py-0.5 rounded border ${getSecaoBadgeClass(currentSecao)}`
+                                : 'text-slate-300 font-medium'
+                            }
                           >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {!isFinalizado && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteItem(item.id)}
-                            className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8"
+                            {displaySecao}
+                          </span>
+                        ) : (
+                          <Select
+                            value={currentSecao || '__NONE'}
+                            onValueChange={(val) => handleUpdateSecao(prod.id, val)}
+                            disabled={updatingSecaoProdId === prod.id}
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                            <SelectTrigger
+                              className={`h-7 text-xs px-2 py-0.5 rounded border border-slate-200/80 bg-white shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-orange-400 w-auto min-w-[110px] ${
+                                currentSecao
+                                  ? getSecaoBadgeClass(currentSecao)
+                                  : 'text-slate-400 font-normal'
+                              }`}
+                            >
+                              <SelectValue placeholder="—">
+                                {currentSecao ? (
+                                  currentSecao
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CONGELADO">CONGELADO</SelectItem>
+                              <SelectItem value="GERAL">GERAL</SelectItem>
+                              <SelectItem value="RESFRIADO">RESFRIADO</SelectItem>
+                              <SelectItem value="__NONE">Outros</SelectItem>
+                            </SelectContent>
+                          </Select>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell
+                        className={`font-bold text-slate-800 ${
+                          item.carregado ? 'line-through text-slate-400' : ''
+                        }`}
+                      >
+                        {prod?.nome || 'Produto'}
+                      </TableCell>
+                      <TableCell className="text-slate-600 text-sm">{prod?.marca || '-'}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {item.peso_total_kg.toFixed(1)} kg
+                      </TableCell>
+                      <TableCell className="text-right font-black text-slate-900">
+                        {getItemQuantidade(item)}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 max-w-[160px] truncate">
+                        {item.observacao || '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {!isFinalizado && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setEditingItemObs({ id: item.id, text: item.observacao || '' })
+                              }
+                              className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-8 w-8"
+                              title="Editar observação do item"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {!isFinalizado && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}
