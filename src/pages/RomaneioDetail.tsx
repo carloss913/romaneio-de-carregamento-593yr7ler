@@ -160,13 +160,15 @@ export default function RomaneioDetail() {
 
   const debouncedHandleRefresh = useCallback(() => {
     if (!initialLoadDoneRef.current) return
+    // If the local user is currently updating a section in background, skip refreshing to avoid jumping scroll/full reload
+    if (updatingSecaoProdId) return
     if (realtimeDebounceTimerRef.current) {
       clearTimeout(realtimeDebounceTimerRef.current)
     }
     realtimeDebounceTimerRef.current = setTimeout(() => {
       handleRefresh(false)
     }, 500)
-  }, [handleRefresh])
+  }, [handleRefresh, updatingSecaoProdId])
 
   useEffect(() => {
     return () => {
@@ -355,30 +357,44 @@ export default function RomaneioDetail() {
   }
 
   const handleUpdateSecao = async (produtoId: string, novaSecao: string) => {
+    const prevProdutos = produtos
+    const prevItens = itens
+    const previousProduto = produtos.find((p) => p.id === produtoId)
+    const previousSecao = previousProduto?.secao
+
     const secaoVal = novaSecao === '__NONE' || !novaSecao ? undefined : normalizeSecao(novaSecao)
+    if (secaoVal === previousSecao) return
+
     setUpdatingSecaoProdId(produtoId)
+
+    // 1. Atualização otimista imediata do estado local
+    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, secao: secaoVal } : p)))
+    setItens((prev) =>
+      prev.map((item) => {
+        if (item.produto === produtoId && item.expand?.produto) {
+          return {
+            ...item,
+            expand: {
+              ...item.expand,
+              produto: {
+                ...item.expand.produto,
+                secao: secaoVal,
+              },
+            },
+          }
+        }
+        return item
+      }),
+    )
+
+    // 2. Mutação em background sem disparar loadData() completo
     try {
       await updateProduto(produtoId, { secao: secaoVal })
-      setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, secao: secaoVal } : p)))
-      setItens((prev) =>
-        prev.map((item) => {
-          if (item.produto === produtoId && item.expand?.produto) {
-            return {
-              ...item,
-              expand: {
-                ...item.expand,
-                produto: {
-                  ...item.expand.produto,
-                  secao: secaoVal,
-                },
-              },
-            }
-          }
-          return item
-        }),
-      )
       toast.success('Seção atualizada com sucesso!')
     } catch (err) {
+      // 3. Reverter estado local em caso de erro
+      setProdutos(prevProdutos)
+      setItens(prevItens)
       toast.error('Erro ao atualizar seção do produto')
     } finally {
       setUpdatingSecaoProdId(null)
