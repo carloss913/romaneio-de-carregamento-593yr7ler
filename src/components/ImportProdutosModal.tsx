@@ -127,61 +127,124 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
     setLoading(true)
     let created = 0,
       updated = 0
-    try {
-      for (const r of valid) {
-        const num = (s: string) => parseFloat(s.replace(',', '.'))
+    let failed = 0
+    const BATCH_SIZE = 8
+    const DELAY_MS = 200
 
-        if (r.status === 'atualizar' && r.existingId) {
-          const ex = existing.find((p) => p.id === r.existingId)
-          const updateData: Record<string, unknown> = { ativo: ex?.ativo ?? true }
+    const executeWithRetry = async <T,>(
+      operation: () => Promise<T>,
+      maxRetries = 3,
+    ): Promise<T> => {
+      let attempt = 0
+      while (attempt < maxRetries) {
+        try {
+          return await operation()
+        } catch (err: unknown) {
+          attempt++
+          const is429 =
+            err && typeof err === 'object' && 'status' in err && (err as any).status === 429
 
-          if (mappings.codigo && r.codigo.trim()) updateData.codigo = r.codigo
-          if (mappings.nome && r.nome.trim()) updateData.nome = r.nome
-          if (mappings.secao && r.secao.trim()) {
-            updateData.secao = normalizeSecao(r.secao) || r.secao.trim().toUpperCase()
+          if (is429 && attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+            continue
           }
-          if (mappings.peso_caixa_kg && r.peso_caixa_kg.trim()) {
-            updateData.peso_caixa_kg = num(r.peso_caixa_kg)
-          }
-          if (mappings.peso_peca_kg && r.peso_peca_kg.trim()) {
-            updateData.peso_peca_kg = num(r.peso_peca_kg)
-          }
-          if (mappings.pecas_por_caixa && r.pecas_por_caixa.trim()) {
-            updateData.pecas_por_caixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
-          }
-
-          await updateProduto(r.existingId, updateData)
-          updated++
-        } else {
-          const pc = r.peso_caixa_kg.trim() ? num(r.peso_caixa_kg) : 0
-          const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
-          let pecasPorCaixa = 0
-          if (r.pecas_por_caixa.trim()) {
-            pecasPorCaixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
-          } else if (pp > 0 && pc > 0) {
-            pecasPorCaixa = Math.round(pc / pp)
-          }
-          const normSecao = normalizeSecao(r.secao)
-          const data = {
-            codigo: r.codigo,
-            nome: r.nome,
-            secao: normSecao,
-            peso_caixa_kg: pc,
-            peso_peca_kg: pp,
-            pecas_por_caixa: pecasPorCaixa,
-            ativo: true,
-          }
-          await createProduto(data)
-          created++
+          throw err
         }
       }
-      toast({
-        title: 'Importação concluída!',
-        description: `${created} produto(s) criado(s) e ${updated} atualizado(s).`,
-      })
-      onSuccess()
-      onOpenChange(false)
-      reset()
+      throw new Error('Número máximo de tentativas atingido.')
+    }
+
+    try {
+      for (let i = 0; i < valid.length; i += BATCH_SIZE) {
+        const batch = valid.slice(i, i + BATCH_SIZE)
+        const batchResults = await Promise.allSettled(
+          batch.map(async (r) => {
+            const num = (s: string) => parseFloat(s.replace(',', '.'))
+
+            if (r.status === 'atualizar' && r.existingId) {
+              const ex = existing.find((p) => p.id === r.existingId)
+              const updateData: Record<string, unknown> = { ativo: ex?.ativo ?? true }
+
+              if (mappings.codigo && r.codigo.trim()) updateData.codigo = r.codigo
+              if (mappings.nome && r.nome.trim()) updateData.nome = r.nome
+              if (mappings.secao && r.secao.trim()) {
+                updateData.secao = normalizeSecao(r.secao) || r.secao.trim().toUpperCase()
+              }
+              if (mappings.peso_caixa_kg && r.peso_caixa_kg.trim()) {
+                updateData.peso_caixa_kg = num(r.peso_caixa_kg)
+              }
+              if (mappings.peso_peca_kg && r.peso_peca_kg.trim()) {
+                updateData.peso_peca_kg = num(r.peso_peca_kg)
+              }
+              if (mappings.pecas_por_caixa && r.pecas_por_caixa.trim()) {
+                updateData.pecas_por_caixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
+              }
+
+              await executeWithRetry(() => updateProduto(r.existingId!, updateData))
+              return { type: 'updated' as const }
+            } else {
+              const pc = r.peso_caixa_kg.trim() ? num(r.peso_caixa_kg) : 0
+              const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
+              let pecasPorCaixa = 0
+              if (r.pecas_por_caixa.trim()) {
+                pecasPorCaixa = parseFloat(r.pecas_por_caixa.replace(',', '.')) || 0
+              } else if (pp > 0 && pc > 0) {
+                pecasPorCaixa = Math.round(pc / pp)
+              }
+              const normSecao = normalizeSecao(r.secao)
+              const data = {
+                codigo: r.codigo,
+                nome: r.nome,
+                secao: normSecao,
+                peso_caixa_kg: pc,
+                peso_peca_kg: pp,
+                pecas_por_caixa: pecasPorCaixa,
+                ativo: true,
+              }
+              await executeWithRetry(() => createProduto(data))
+              return { type: 'created' as const }
+            }
+          }),
+        )
+
+        batchResults.forEach((res, batchIdx) => {
+          if (res.status === 'fulfilled') {
+            if (res.value.type === 'created') created++
+            else updated++
+          } else {
+            failed++
+            const rowItem = batch[batchIdx]
+            toast({
+              title: `Falha ao importar produto [${rowItem.codigo || rowItem.nome}]`,
+              description: getErrorMessage(res.reason),
+              variant: 'destructive',
+            })
+          }
+        })
+
+        if (i + BATCH_SIZE < valid.length) {
+          await new Promise((resolve) => setTimeout(resolve, DELAY_MS))
+        }
+      }
+
+      if (failed > 0) {
+        toast({
+          title: created + updated > 0 ? 'Importação parcial concluída' : 'Erro na importação',
+          description: `${created} criado(s), ${updated} atualizado(s), ${failed} falha(s).`,
+          variant: created + updated > 0 ? 'default' : 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Importação concluída!',
+          description: `${created} produto(s) criado(s) e ${updated} atualizado(s).`,
+        })
+      }
+
+      if (created + updated > 0) {
+        onSuccess()
+        onOpenChange(false)
+        reset()
+      }
     } catch (err) {
       toast({
         title: 'Erro na importação',

@@ -32,7 +32,15 @@ export const deleteRomaneioItem = (id: string) => pb.collection('romaneio_itens'
 
 export const deleteItensByRomaneio = async (romaneioId: string) => {
   const itens = await getRomaneioItens(romaneioId)
-  await Promise.all(itens.map((item) => deleteRomaneioItem(item.id)))
+  // Deletar em lotes controlados com delay para evitar 429
+  const BATCH_SIZE = 10
+  for (let i = 0; i < itens.length; i += BATCH_SIZE) {
+    const batch = itens.slice(i, i + BATCH_SIZE)
+    await Promise.all(batch.map((item) => deleteRomaneioItem(item.id)))
+    if (i + BATCH_SIZE < itens.length) {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    }
+  }
 }
 
 export const refreshRomaneioItens = async (

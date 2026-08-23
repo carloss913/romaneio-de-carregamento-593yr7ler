@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Progress } from '@/components/ui/progress'
 import {
   Table,
   TableHeader,
@@ -35,6 +36,7 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Produto, RomaneioItem, normalizeSecao } from '@/types/database'
@@ -46,6 +48,7 @@ import { updateProduto, createProduto } from '@/services/produtos'
 import { ProdutoModal } from './ProdutoModal'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
+import { ClientResponseError } from 'pocketbase'
 
 interface ImportWizardModalProps {
   open: boolean
@@ -106,6 +109,11 @@ export function ImportWizardModal({
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([])
   const [substituir, setSubstituir] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [importProgress, setImportProgress] = useState<{
+    current: number
+    total: number
+    message: string
+  } | null>(null)
   const [weightAcknowledged, setWeightAcknowledged] = useState(false)
   const [novoProdutoModal, setNovoProdutoModal] = useState<{
     open: boolean
@@ -140,6 +148,7 @@ export function ImportWizardModal({
     setProcessedRows([])
     setSubstituir(false)
     setWeightAcknowledged(false)
+    setImportProgress(null)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,6 +319,57 @@ export function ImportWizardModal({
     setProcessedRows((prev) => prev.filter((row) => row.matchStatus !== 'peso_invalido'))
   }
 
+  // Executa uma operação com até 3 tentativas no total se houver 429 Too Many Requests
+  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
+    let attempt = 0
+    while (attempt < maxRetries) {
+      try {
+        return await operation()
+      } catch (err: unknown) {
+        attempt++
+        const is429 =
+          (err instanceof ClientResponseError && err.status === 429) ||
+          (typeof err === 'object' &&
+            err !== null &&
+            'status' in err &&
+            (err as any).status === 429)
+
+        if (is429 && attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          continue
+        }
+        throw err
+      }
+    }
+    throw new Error('Número máximo de tentativas atingido.')
+  }
+
+  // Executa uma lista de tarefas em lotes (batch) com delay entre cada lote e paralelismo com Promise.all
+  const processInBatches = async <T, R>(
+    items: T[],
+    batchSize: number,
+    delayMs: number,
+    task: (item: T) => Promise<R>,
+    onBatchComplete?: (completedCount: number, total: number) => void,
+  ): Promise<PromiseSettledResult<R>[]> => {
+    const results: PromiseSettledResult<R>[] = []
+    let completed = 0
+
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize)
+      const batchResults = await Promise.allSettled(batch.map((item) => task(item)))
+      results.push(...batchResults)
+      completed += batch.length
+      onBatchComplete?.(Math.min(completed, items.length), items.length)
+
+      if (i + batchSize < items.length && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
+    }
+
+    return results
+  }
+
   const handleConfirmImport = async () => {
     if (blockedRows.length > 0) {
       toast({
@@ -340,79 +400,234 @@ export function ImportWizardModal({
     }
 
     setLoading(true)
+    const totalOperations = valid.length + toAutoCreate.length
+    setImportProgress({
+      current: 0,
+      total: totalOperations,
+      message: 'Iniciando importação...',
+    })
+
+    const BATCH_SIZE = 8
+    const DELAY_MS = 200
+
     try {
-      if (substituir) await deleteItensByRomaneio(romaneioId)
+      if (substituir) {
+        setImportProgress({
+          current: 0,
+          total: totalOperations,
+          message: 'Limpando itens anteriores do romaneio...',
+        })
+        await deleteItensByRomaneio(romaneioId)
+      }
+
       let totalCaixas = 0
       let totalPecas = 0
       let totalImported = 0
+      let totalFailures = 0
+      const errorsList: string[] = []
 
-      for (const row of valid) {
-        if (!row.matchedProduto) continue
-        const updates: Record<string, string> = {}
-        if (row.marca && row.matchedProduto.marca !== row.marca) {
-          updates.marca = row.marca
-        }
+      // 1. Processar auto-cadastros de produtos primeiro (em lotes)
+      const autoCreatedMap = new Map<string, Produto>()
+      if (toAutoCreate.length > 0) {
+        setImportProgress({
+          current: 0,
+          total: totalOperations,
+          message: `Cadastrando ${toAutoCreate.length} novo(s) produto(s)...`,
+        })
+
+        await processInBatches(
+          toAutoCreate,
+          BATCH_SIZE,
+          DELAY_MS,
+          async (row) => {
+            try {
+              const normSecao = normalizeSecao(row.secao)
+              const novoProduto = await executeWithRetry(() =>
+                createProduto({
+                  codigo: row.rawCode,
+                  nome: row.nomeFromSheet || row.rawCode,
+                  marca: row.marca || '',
+                  secao: normSecao,
+                  ativo: true,
+                }),
+              )
+              autoCreatedMap.set(row.id, novoProduto)
+              return novoProduto
+            } catch (err: unknown) {
+              const prodIdentifier = row.rawCode || row.nomeFromSheet || 'Desconhecido'
+              const errorReason = getErrorMessage(err)
+              console.error(`Erro ao auto-cadastrar produto [${prodIdentifier}]:`, err)
+              errorsList.push(`Produto [${prodIdentifier}]: ${errorReason}`)
+              toast({
+                title: `Falha ao cadastrar produto [${prodIdentifier}]`,
+                description: errorReason,
+                variant: 'destructive',
+              })
+              throw err
+            }
+          },
+          (completed) => {
+            setImportProgress({
+              current: completed,
+              total: totalOperations,
+              message: `Cadastrando novos produtos (${completed} de ${toAutoCreate.length})...`,
+            })
+          },
+        )
+      }
+
+      // 2. Atualizar produtos existentes com novas seções/marcas se necessário (em lotes)
+      const rowsWithUpdates = valid.filter((row) => {
+        if (!row.matchedProduto) return false
         const normSecao =
           normalizeSecao(row.secao) ||
           (row.secao && row.secao.trim() ? (row.secao.trim() as any) : undefined)
-        if (normSecao && row.matchedProduto.secao !== normSecao) {
-          updates.secao = normSecao
-        }
-        if (Object.keys(updates).length > 0) {
-          try {
-            await updateProduto(row.matchedProduto.id, updates)
-          } catch (updateErr) {
-            console.error('Erro ao atualizar seção:', updateErr)
-            toast({
-              title: `Aviso ao atualizar produto ${row.matchedProduto.codigo || row.matchedProduto.nome}`,
-              description: getErrorMessage(updateErr),
-              variant: 'destructive',
-            })
-          }
-        }
-        await createRomaneioItem({
-          romaneio: romaneioId,
-          produto: row.matchedProduto.id,
-          peso_total_kg: row.pesoKg,
-          caixas: row.caixas,
-          pecas: row.pecas,
+        const hasMarcaDiff = !!(row.marca && row.matchedProduto.marca !== row.marca)
+        const hasSecaoDiff = !!(normSecao && row.matchedProduto.secao !== normSecao)
+        return hasMarcaDiff || hasSecaoDiff
+      })
+
+      if (rowsWithUpdates.length > 0) {
+        setImportProgress({
+          current: toAutoCreate.length,
+          total: totalOperations,
+          message: `Atualizando informações de ${rowsWithUpdates.length} produto(s)...`,
         })
-        totalCaixas += row.caixas
-        totalPecas += row.pecas
-        totalImported++
+
+        await processInBatches(rowsWithUpdates, BATCH_SIZE, DELAY_MS, async (row) => {
+          if (!row.matchedProduto) return
+          const updates: Record<string, string> = {}
+          if (row.marca && row.matchedProduto.marca !== row.marca) {
+            updates.marca = row.marca
+          }
+          const normSecao =
+            normalizeSecao(row.secao) ||
+            (row.secao && row.secao.trim() ? (row.secao.trim() as any) : undefined)
+          if (normSecao && row.matchedProduto.secao !== normSecao) {
+            updates.secao = normSecao
+          }
+          if (Object.keys(updates).length > 0) {
+            try {
+              await executeWithRetry(() => updateProduto(row.matchedProduto!.id, updates))
+            } catch (updateErr) {
+              console.error('Erro ao atualizar produto:', updateErr)
+            }
+          }
+        })
+      }
+
+      // 3. Criar itens do romaneio (para produtos válidos e produtos auto-cadastrados com sucesso)
+      interface ItemToCreate {
+        row: ProcessedRow
+        produtoId: string
+        pesoKg: number
+        caixas: number
+        pecas: number
+      }
+
+      const itensToCreate: ItemToCreate[] = []
+
+      for (const row of valid) {
+        if (row.matchedProduto) {
+          itensToCreate.push({
+            row,
+            produtoId: row.matchedProduto.id,
+            pesoKg: row.pesoKg,
+            caixas: row.caixas,
+            pecas: row.pecas,
+          })
+        }
       }
 
       for (const row of toAutoCreate) {
-        const normSecao = normalizeSecao(row.secao)
-        const novoProduto = await createProduto({
-          codigo: row.rawCode,
-          nome: row.nomeFromSheet || row.rawCode,
-          marca: row.marca || '',
-          secao: normSecao,
-          ativo: true,
-        })
-        await createRomaneioItem({
-          romaneio: romaneioId,
-          produto: novoProduto.id,
-          peso_total_kg: row.pesoKg,
-          caixas: 0,
-          pecas: 0,
-        })
-        totalImported++
+        const novoProduto = autoCreatedMap.get(row.id)
+        if (novoProduto) {
+          itensToCreate.push({
+            row,
+            produtoId: novoProduto.id,
+            pesoKg: row.pesoKg,
+            caixas: 0,
+            pecas: 0,
+          })
+        } else {
+          // Se o produto falhou no auto-cadastro, não tenta criar o item no romaneio
+          totalFailures++
+        }
       }
 
+      setImportProgress({
+        current: toAutoCreate.length,
+        total: totalOperations,
+        message: `Salvando itens no romaneio (0 de ${itensToCreate.length})...`,
+      })
+
+      const itemResults = await processInBatches(
+        itensToCreate,
+        BATCH_SIZE,
+        DELAY_MS,
+        async (item) => {
+          return executeWithRetry(() =>
+            createRomaneioItem({
+              romaneio: romaneioId,
+              produto: item.produtoId,
+              peso_total_kg: item.pesoKg,
+              caixas: item.caixas,
+              pecas: item.pecas,
+            }),
+          )
+        },
+        (completed) => {
+          const overallDone = Math.min(toAutoCreate.length + completed, totalOperations)
+          setImportProgress({
+            current: overallDone,
+            total: totalOperations,
+            message: `Salvando... ${overallDone} de ${totalOperations} itens`,
+          })
+        },
+      )
+
+      // Computar totais
+      itemResults.forEach((res, index) => {
+        const item = itensToCreate[index]
+        if (res.status === 'fulfilled') {
+          totalImported++
+          totalCaixas += item.caixas
+          totalPecas += item.pecas
+        } else {
+          totalFailures++
+          const prodIdentifier = item.row.rawCode || 'Desconhecido'
+          const errorReason = getErrorMessage(res.reason)
+          errorsList.push(`Item [${prodIdentifier}]: ${errorReason}`)
+          console.error(`Erro ao criar item do romaneio para [${prodIdentifier}]:`, res.reason)
+        }
+      })
+
       if (file) {
-        await updateRomaneio(romaneioId, { arquivo_planilha: file }).catch((err) => {
+        try {
+          await executeWithRetry(() => updateRomaneio(romaneioId, { arquivo_planilha: file }))
+        } catch (err) {
           console.error('Erro ao salvar planilha no romaneio:', err)
+        }
+      }
+
+      if (totalFailures > 0) {
+        toast({
+          title: totalImported > 0 ? 'Importação parcial concluída' : 'Falha na importação',
+          description: `${totalImported} itens importados, ${totalFailures} falha(s).`,
+          variant: totalImported > 0 ? 'default' : 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Importação concluída!',
+          description: `${totalImported} produtos importados (${totalCaixas} cx • ${totalPecas} pct • ${toAutoCreate.length} auto-cadastrados).`,
         })
       }
-      toast({
-        title: 'Importação concluída!',
-        description: `${totalImported} produtos importados (${totalCaixas} cx • ${totalPecas} pct • ${toAutoCreate.length} auto-cadastrados).`,
-      })
-      onImportComplete()
-      onOpenChange(false)
-      resetWizard()
+
+      if (totalImported > 0) {
+        onImportComplete()
+        onOpenChange(false)
+        resetWizard()
+      }
     } catch (err) {
       toast({
         title: 'Erro na importação',
@@ -421,6 +636,7 @@ export function ImportWizardModal({
       })
     } finally {
       setLoading(false)
+      setImportProgress(null)
     }
   }
 
@@ -852,6 +1068,28 @@ export function ImportWizardModal({
                   </p>
                 </div>
 
+                {loading && importProgress && (
+                  <div className="border border-orange-200 rounded-xl p-4 bg-orange-50/80 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-orange-800">
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-600" />
+                        {importProgress.message}
+                      </span>
+                      <span>
+                        {importProgress.current} de {importProgress.total} (
+                        {Math.round(
+                          (importProgress.current / Math.max(importProgress.total, 1)) * 100,
+                        )}
+                        %)
+                      </span>
+                    </div>
+                    <Progress
+                      value={(importProgress.current / Math.max(importProgress.total, 1)) * 100}
+                      className="h-2 bg-orange-100"
+                    />
+                  </div>
+                )}
+
                 {existingItens.length > 0 && (
                   <div className="border rounded-xl p-4 bg-amber-50 text-left space-y-2 text-xs text-amber-800">
                     <p className="font-semibold">
@@ -918,7 +1156,16 @@ export function ImportWizardModal({
                 disabled={loading || !canConfirm}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
-                {loading ? 'Importando...' : 'Confirmar Importação'}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {importProgress
+                      ? `Salvando... ${importProgress.current}/${importProgress.total}`
+                      : 'Importando...'}
+                  </>
+                ) : (
+                  'Confirmar Importação'
+                )}
               </Button>
             )}
           </DialogFooter>
