@@ -12,7 +12,6 @@ import {
   Copy,
   Check,
   Send,
-  Settings,
   Save,
   X,
   Pencil,
@@ -63,7 +62,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { ImportWizardModal } from '@/components/ImportWizardModal'
 import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { PrintManifest } from '@/components/PrintManifest'
-import { ConfigPhoneModal } from '@/components/ConfigPhoneModal'
 import { useRealtime } from '@/hooks/use-realtime'
 import { toast } from 'sonner'
 
@@ -74,9 +72,7 @@ export default function RomaneioDetail() {
   const [romaneio, setRomaneio] = useState<Romaneio | null>(null)
   const [itens, setItens] = useState<RomaneioItem[]>([])
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [configPhone, setConfigPhone] = useState('')
   const [configContato, setConfigContato] = useState('')
-  const [configOpen, setConfigOpen] = useState(false)
 
   const [importWizardOpen, setImportWizardOpen] = useState(false)
   const [manualItemModal, setManualItemModal] = useState(false)
@@ -112,7 +108,6 @@ export default function RomaneioDetail() {
       setProdutos(listProds)
       try {
         const config = await getConfiguracoes()
-        setConfigPhone(config?.telefone_whatsapp || '')
         setConfigContato(config?.telefone_contato || '')
       } catch {
         /* no config yet */
@@ -573,16 +568,6 @@ export default function RomaneioDetail() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setConfigOpen(true)}
-              className="text-slate-400 hover:text-slate-700"
-              title="Configurar telefone"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
               onClick={() => setDeleteConfirmOpen(true)}
               className="text-slate-400 hover:text-red-500 hover:bg-red-50"
             >
@@ -998,12 +983,6 @@ export default function RomaneioDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfigPhoneModal
-        open={configOpen}
-        onOpenChange={setConfigOpen}
-        onSuccess={() => loadData()}
-      />
 
       <PrintManifest romaneio={romaneio} itens={sortedItens} />
     </>
