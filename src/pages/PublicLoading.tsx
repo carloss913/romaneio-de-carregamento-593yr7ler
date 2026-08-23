@@ -60,6 +60,7 @@ export default function PublicLoading() {
   const [conferenteError, setConferenteError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const refreshingRef = useRef(false)
+  const pendingChangesRef = useRef<Map<string, boolean>>(new Map())
   const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
 
   const loadData = async () => {
@@ -87,16 +88,40 @@ export default function PublicLoading() {
     refreshingRef.current = true
     setRefreshing(true)
     try {
+      // 1. Enviar alterações pendentes acumuladas offline
+      let pendingSyncedCount = 0
+      if (pendingChangesRef.current.size > 0) {
+        const pendingEntries = Array.from(pendingChangesRef.current.entries())
+        for (const [itemId, carregadoState] of pendingEntries) {
+          try {
+            await updateRomaneioItem(itemId, { carregado: carregadoState })
+            pendingChangesRef.current.delete(itemId)
+            pendingSyncedCount++
+          } catch {
+            // Mantém na fila para a próxima tentativa se falhar
+          }
+        }
+        if (pendingSyncedCount > 0) {
+          toast({
+            title: `${pendingSyncedCount} alteraç${pendingSyncedCount > 1 ? 'ões pendentes sincronizadas' : 'ão pendente sincronizada'}.`,
+          })
+        }
+      }
+
+      // 2. Atualizar produtos e recarregar dados do servidor
       const freshProdutos = await getProdutos()
       const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
       await loadData()
       if (showToast) {
-        toast({
-          title:
-            updatedCount > 0
-              ? `${updatedCount} item(ns) atualizado(s).`
-              : 'Romaneio sincronizado com sucesso.',
-        })
+        if (updatedCount > 0) {
+          toast({
+            title: `${updatedCount} item(ns) atualizado(s).`,
+          })
+        } else if (pendingSyncedCount === 0) {
+          toast({
+            title: 'Romaneio sincronizado com sucesso.',
+          })
+        }
       }
     } catch {
       if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
@@ -172,7 +197,10 @@ export default function PublicLoading() {
     setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, carregado: nextCarregado } : i)))
     try {
       await updateRomaneioItem(item.id, { carregado: nextCarregado })
+      // Se foi enviado com sucesso, garante que é removido da fila pendente se antes estava lá
+      pendingChangesRef.current.delete(item.id)
     } catch {
+      pendingChangesRef.current.set(item.id, nextCarregado)
       toast({
         title: 'Sem conexão',
         description: 'Clique em Atualizar quando estiver online para sincronizar.',
@@ -243,6 +271,7 @@ export default function PublicLoading() {
     try {
       await updateRomaneio(romaneio.id, { status: 'finalizado' })
       setRomaneio((prev) => (prev ? { ...prev, status: 'finalizado' } : prev))
+      pendingChangesRef.current.clear()
       toast({ title: 'Carregamento finalizado!' })
       setConferenteModalOpen(false)
       loadData()
