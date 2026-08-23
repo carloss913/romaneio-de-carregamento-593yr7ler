@@ -113,19 +113,19 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             )
           })}
         </tbody>
-        <tfoot>
+        <tfoot className="print-tfoot-last">
           <tr className="border-t border-b border-black font-bold bg-slate-100 text-[11px] print-avoid-break">
             <td colSpan={2} className="py-1.5 px-1 uppercase">
               TOTAL: {itens.length} ITENS
             </td>
-            <td className="py-1.5 px-1 text-right text-slate-700 text-[11px]">
+            <td className="hidden print:hidden py-1.5 px-1 text-right tabular-nums whitespace-nowrap">
+              {totalPeso.toFixed(1)} kg
+            </td>
+            <td className="py-1.5 px-1 text-right text-black font-bold text-[11px]">
               {totalCaixas > 0 && `${totalCaixas} cx `}
               {totalPecas > 0 && `${totalPecas} pct`}
             </td>
-            <td className="py-1.5 px-1 text-right tabular-nums whitespace-nowrap">
-              {totalPeso.toFixed(1)} kg
-            </td>
-            <td colSpan={2} className="py-1.5 px-1 text-right"></td>
+            <td className="py-1.5 px-1 text-right"></td>
           </tr>
         </tfoot>
       </table>

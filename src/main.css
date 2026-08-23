@@ -154,6 +154,12 @@
     display: table-row-group !important;
   }
 
+  /* tfoot com display: table-row-group para aparecer SOMENTE na última página em vez de repetir a cada página */
+  tfoot.print-tfoot-single,
+  tfoot.print-tfoot-last {
+    display: table-row-group !important;
+  }
+
   /* Tabela compacta */
   .print-table {
     width: 100% !important;
