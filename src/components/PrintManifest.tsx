@@ -65,7 +65,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
           <tr className="border-b border-black font-bold text-[11px] uppercase bg-slate-100">
             <th className="py-1.5 px-1 text-center w-6">✓</th>
             <th className="py-1.5 px-1 w-14">Cód.</th>
-            <th className="py-1.5 px-1 w-20">Seção</th>
+            <th className="hidden print:hidden py-1.5 px-1 w-20">Seção</th>
             <th className="py-1.5 px-1">Descrição do Produto</th>
             <th className="py-1.5 px-1 text-right w-20">Peso (kg)</th>
             <th className="py-1.5 px-1 text-right w-24">Quantidade</th>
@@ -89,7 +89,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                 <td className="py-1.5 px-1 text-slate-700 font-mono text-[11px] tabular-nums align-middle">
                   {prod?.codigo || '-'}
                 </td>
-                <td className="py-1.5 px-1 text-slate-700 text-[11px] uppercase font-semibold align-middle truncate max-w-[80px]">
+                <td className="hidden print:hidden py-1.5 px-1 text-slate-700 text-[11px] uppercase font-semibold align-middle truncate max-w-[80px]">
                   {secao}
                 </td>
                 <td className="py-1.5 px-1 font-semibold text-black align-middle text-[11px]">
@@ -115,7 +115,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
         </tbody>
         <tfoot>
           <tr className="border-t border-b border-black font-bold bg-slate-100 text-[11px] print-avoid-break">
-            <td colSpan={3} className="py-1.5 px-1 uppercase">
+            <td colSpan={2} className="py-1.5 px-1 uppercase">
               TOTAL: {itens.length} ITENS
             </td>
             <td className="py-1.5 px-1 text-right text-slate-700 text-[11px]">
