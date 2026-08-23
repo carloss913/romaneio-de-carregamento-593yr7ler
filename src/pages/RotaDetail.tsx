@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
 import { RotaType, Romaneio, RomaneioItem } from '@/types/database'
@@ -28,7 +28,9 @@ export default function RotaDetail() {
   const [novoModalOpen, setNovoModalOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id?: string }>({ open: false })
 
-  const loadData = async () => {
+  const realtimeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const loadData = useCallback(async () => {
     try {
       const list = await getRomaneiosByRota(rotaDecoded)
       setRomaneios(list)
@@ -37,7 +39,24 @@ export default function RotaDetail() {
     } catch {
       /* intentionally ignored */
     }
-  }
+  }, [rotaDecoded])
+
+  const debouncedLoadData = useCallback(() => {
+    if (realtimeDebounceTimerRef.current) {
+      clearTimeout(realtimeDebounceTimerRef.current)
+    }
+    realtimeDebounceTimerRef.current = setTimeout(() => {
+      loadData()
+    }, 500)
+  }, [loadData])
+
+  useEffect(() => {
+    return () => {
+      if (realtimeDebounceTimerRef.current) {
+        clearTimeout(realtimeDebounceTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // Dispara a rotina de exclusão automática (fire-and-forget) e
@@ -48,10 +67,10 @@ export default function RotaDetail() {
       })
       .catch(() => {})
     loadData()
-  }, [rotaDecoded])
+  }, [loadData])
 
-  useRealtime('romaneios', () => loadData())
-  useRealtime('romaneio_itens', () => loadData())
+  useRealtime('romaneios', debouncedLoadData)
+  useRealtime('romaneio_itens', debouncedLoadData)
 
   const handleDelete = async () => {
     if (!deleteDialog.id) return

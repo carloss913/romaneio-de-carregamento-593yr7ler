@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -88,32 +88,9 @@ export default function RomaneioDetail() {
   const [refreshing, setRefreshing] = useState(false)
   const refreshingRef = useRef(false)
 
-  const handleRefresh = async (showToast = true) => {
-    if (refreshingRef.current || !romaneio) return
-    refreshingRef.current = true
-    setRefreshing(true)
-    try {
-      const freshProdutos = await getProdutos()
-      setProdutos(freshProdutos)
-      const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
-      if (showToast) {
-        toast({
-          title:
-            updatedCount > 0
-              ? `${updatedCount} item(ns) atualizado(s) com os dados mais recentes.`
-              : 'Nenhum item precisou de atualização.',
-        })
-      }
-      if (updatedCount > 0) loadData()
-    } catch {
-      if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
-    } finally {
-      refreshingRef.current = false
-      setRefreshing(false)
-    }
-  }
+  const realtimeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return
     try {
       const rom = await getRomaneio(id)
@@ -133,15 +110,70 @@ export default function RomaneioDetail() {
     } catch {
       /* intentionally ignored */
     }
-  }
+  }, [id])
+
+  const handleRefresh = useCallback(
+    async (showToast = true) => {
+      if (refreshingRef.current || !id) return
+      refreshingRef.current = true
+      setRefreshing(true)
+      try {
+        const freshProdutos = await getProdutos()
+        setProdutos(freshProdutos)
+        const currentItens = await getRomaneioItens(id)
+        const updatedCount = await refreshRomaneioItens(currentItens, freshProdutos)
+        if (showToast) {
+          toast({
+            title:
+              updatedCount > 0
+                ? `${updatedCount} item(ns) atualizado(s) com os dados mais recentes.`
+                : 'Nenhum item precisou de atualização.',
+          })
+        }
+        if (updatedCount > 0) loadData()
+      } catch {
+        if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
+      } finally {
+        refreshingRef.current = false
+        setRefreshing(false)
+      }
+    },
+    [id, loadData, toast],
+  )
+
+  const debouncedLoadData = useCallback(() => {
+    if (realtimeDebounceTimerRef.current) {
+      clearTimeout(realtimeDebounceTimerRef.current)
+    }
+    realtimeDebounceTimerRef.current = setTimeout(() => {
+      loadData()
+    }, 500)
+  }, [loadData])
+
+  const debouncedHandleRefresh = useCallback(() => {
+    if (realtimeDebounceTimerRef.current) {
+      clearTimeout(realtimeDebounceTimerRef.current)
+    }
+    realtimeDebounceTimerRef.current = setTimeout(() => {
+      handleRefresh(false)
+    }, 500)
+  }, [handleRefresh])
+
+  useEffect(() => {
+    return () => {
+      if (realtimeDebounceTimerRef.current) {
+        clearTimeout(realtimeDebounceTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     loadData()
-  }, [id])
+  }, [loadData])
 
-  useRealtime('romaneios', () => loadData())
-  useRealtime('romaneio_itens', () => loadData())
-  useRealtime('produtos', () => handleRefresh(false))
+  useRealtime('romaneios', debouncedLoadData)
+  useRealtime('romaneio_itens', debouncedLoadData)
+  useRealtime('produtos', debouncedHandleRefresh)
 
   useEffect(() => {
     if (!showSugestoes) return
