@@ -218,7 +218,7 @@ export function ImportWizardModal({
         if (nomeVal && !aggregated[code].nome) {
           aggregated[code].nome = nomeVal
         }
-        if (secaoVal && !aggregated[code].secao) {
+        if (secaoVal && (!aggregated[code].secao || !normalizeSecao(aggregated[code].secao))) {
           aggregated[code].secao = secaoVal
         }
       } else {
@@ -352,7 +352,9 @@ export function ImportWizardModal({
         if (row.marca && row.matchedProduto.marca !== row.marca) {
           updates.marca = row.marca
         }
-        const normSecao = normalizeSecao(row.secao)
+        const normSecao =
+          normalizeSecao(row.secao) ||
+          (row.secao && row.secao.trim() ? (row.secao.trim() as any) : undefined)
         if (normSecao && row.matchedProduto.secao !== normSecao) {
           updates.secao = normSecao
         }
@@ -360,7 +362,7 @@ export function ImportWizardModal({
           try {
             await updateProduto(row.matchedProduto.id, updates)
           } catch (updateErr) {
-            console.warn('Aviso ao atualizar produto existente:', updateErr)
+            console.error('Erro ao atualizar seção:', updateErr)
             toast({
               title: `Aviso ao atualizar produto ${row.matchedProduto.codigo || row.matchedProduto.nome}`,
               description: getErrorMessage(updateErr),
@@ -399,7 +401,11 @@ export function ImportWizardModal({
         totalImported++
       }
 
-      if (file) await updateRomaneio(romaneioId, { arquivo_planilha: file }).catch(() => {})
+      if (file) {
+        await updateRomaneio(romaneioId, { arquivo_planilha: file }).catch((err) => {
+          console.error('Erro ao salvar planilha no romaneio:', err)
+        })
+      }
       toast({
         title: 'Importação concluída!',
         description: `${totalImported} produtos importados (${totalCaixas} cx • ${totalPecas} pct • ${toAutoCreate.length} auto-cadastrados).`,
@@ -577,6 +583,7 @@ export function ImportWizardModal({
                     <TableHeader className="bg-slate-100 sticky top-0">
                       <TableRow>
                         <TableHead>Código</TableHead>
+                        <TableHead>Seção</TableHead>
                         <TableHead>Peso (kg)</TableHead>
                         <TableHead>Produto</TableHead>
                         <TableHead>Marca</TableHead>
@@ -586,81 +593,133 @@ export function ImportWizardModal({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {processedRows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell className="font-bold text-slate-800">{row.rawCode}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              value={row.pesoKg || ''}
-                              onChange={(e) =>
-                                updateRowWeight(
-                                  row.id,
-                                  e.target.value === '' ? 0 : Number(e.target.value),
-                                )
-                              }
-                              className="h-7 text-xs w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {row.matchedProduto ? (
-                              <span className="text-slate-800 font-semibold">
-                                {row.matchedProduto.nome}
-                              </span>
-                            ) : (
-                              <span className="text-blue-600 font-semibold">
-                                {row.nomeFromSheet || row.rawCode}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-slate-600 text-xs">
-                            {row.marca || '-'}
-                          </TableCell>
-                          <TableCell className="font-bold text-orange-600">
-                            {row.textoFormatado}
-                          </TableCell>
-                          <TableCell>
-                            {row.matchStatus === 'ok' && !row.weightWarning && (
-                              <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 border-emerald-500/30">
-                                <CheckCircle2 className="w-3 h-3 mr-1" /> OK
-                              </Badge>
-                            )}
-                            {row.matchStatus === 'ok' && row.weightWarning && (
-                              <Badge
-                                variant="outline"
-                                className="text-amber-600 border-amber-400 bg-amber-50"
-                                title={row.weightWarningMessage}
+                      {processedRows.map((row) => {
+                        const detectedSecao = normalizeSecao(row.secao)
+                        const hasSecaoText = !!(row.secao && row.secao.trim())
+
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell className="font-bold text-slate-800">
+                              {row.rawCode}
+                            </TableCell>
+                            <TableCell>
+                              {detectedSecao === 'CONGELADO' && (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-cyan-50 text-cyan-700 border-cyan-300 font-semibold text-[10px] px-1.5 py-0.5"
+                                >
+                                  CONGELADO
+                                </Badge>
+                              )}
+                              {detectedSecao === 'GERAL' && (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-amber-50 text-amber-700 border-amber-300 font-semibold text-[10px] px-1.5 py-0.5"
+                                >
+                                  GERAL
+                                </Badge>
+                              )}
+                              {detectedSecao === 'RESFRIADO' && (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-blue-50 text-blue-700 border-blue-300 font-semibold text-[10px] px-1.5 py-0.5"
+                                >
+                                  RESFRIADO
+                                </Badge>
+                              )}
+                              {!detectedSecao && hasSecaoText && (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-slate-100 text-slate-700 border-slate-300 text-[10px] px-1.5 py-0.5"
+                                  title={`Valor bruto: ${row.secao}`}
+                                >
+                                  {row.secao}
+                                </Badge>
+                              )}
+                              {!hasSecaoText && (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-red-50 text-red-600 border-red-300 font-semibold text-[10px] px-1.5 py-0.5 flex items-center gap-1 w-fit"
+                                  title="Sem seção definida na planilha"
+                                >
+                                  <AlertCircle className="w-3 h-3 text-red-500" />
+                                  <span>Sem seção</span>
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                value={row.pesoKg || ''}
+                                onChange={(e) =>
+                                  updateRowWeight(
+                                    row.id,
+                                    e.target.value === '' ? 0 : Number(e.target.value),
+                                  )
+                                }
+                                className="h-7 text-xs w-20"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {row.matchedProduto ? (
+                                <span className="text-slate-800 font-semibold">
+                                  {row.matchedProduto.nome}
+                                </span>
+                              ) : (
+                                <span className="text-blue-600 font-semibold">
+                                  {row.nomeFromSheet || row.rawCode}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-slate-600 text-xs">
+                              {row.marca || '-'}
+                            </TableCell>
+                            <TableCell className="font-bold text-orange-600">
+                              {row.textoFormatado}
+                            </TableCell>
+                            <TableCell>
+                              {row.matchStatus === 'ok' && !row.weightWarning && (
+                                <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 border-emerald-500/30">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" /> OK
+                                </Badge>
+                              )}
+                              {row.matchStatus === 'ok' && row.weightWarning && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-amber-600 border-amber-400 bg-amber-50"
+                                  title={row.weightWarningMessage}
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" /> Peso
+                                </Badge>
+                              )}
+                              {row.matchStatus === 'auto_cadastrar' && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-blue-600 border-blue-400 bg-blue-50"
+                                >
+                                  <Plus className="w-3 h-3 mr-1" /> Auto-cadastrar
+                                </Badge>
+                              )}
+                              {row.matchStatus === 'peso_invalido' && (
+                                <Badge variant="destructive">
+                                  <AlertTriangle className="w-3 h-3 mr-1" /> Peso Inválido
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-300 hover:text-red-500"
+                                onClick={() => removeRow(row.id)}
                               >
-                                <AlertTriangle className="w-3 h-3 mr-1" /> Peso
-                              </Badge>
-                            )}
-                            {row.matchStatus === 'auto_cadastrar' && (
-                              <Badge
-                                variant="outline"
-                                className="text-blue-600 border-blue-400 bg-blue-50"
-                              >
-                                <Plus className="w-3 h-3 mr-1" /> Auto-cadastrar
-                              </Badge>
-                            )}
-                            {row.matchStatus === 'peso_invalido' && (
-                              <Badge variant="destructive">
-                                <AlertTriangle className="w-3 h-3 mr-1" /> Peso Inválido
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-300 hover:text-red-500"
-                              onClick={() => removeRow(row.id)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>

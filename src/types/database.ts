@@ -68,10 +68,10 @@ export function normalizeSecao(
   if (cleaned === 'CONGELADO' || cleaned === 'GERAL' || cleaned === 'RESFRIADO') {
     return cleaned
   }
-  // Try matching substring or common variants if necessary
-  if (cleaned.includes('CONGELAD')) return 'CONGELADO'
-  if (cleaned.includes('RESFRIAD')) return 'RESFRIADO'
+  // Try partial matching: CONG -> CONGELADO, GERAL -> GERAL, RESF -> RESFRIADO
+  if (cleaned.includes('CONG')) return 'CONGELADO'
   if (cleaned.includes('GERAL')) return 'GERAL'
+  if (cleaned.includes('RESF')) return 'RESFRIADO'
   return undefined
 }
 
