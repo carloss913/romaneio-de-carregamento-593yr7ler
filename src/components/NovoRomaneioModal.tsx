@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Dialog,
@@ -43,6 +43,19 @@ export function NovoRomaneioModal({ open, onOpenChange, defaultRota }: NovoRoman
     ).padStart(2, '0')}`
   })
   const [observacoes, setObservacoes] = useState('')
+
+  useEffect(() => {
+    if (open) {
+      setRota(defaultRota || '')
+      const d = new Date()
+      setData(
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+          d.getDate(),
+        ).padStart(2, '0')}`,
+      )
+      setObservacoes('')
+    }
+  }, [open, defaultRota])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
