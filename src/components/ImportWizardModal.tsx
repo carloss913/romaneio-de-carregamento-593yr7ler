@@ -319,7 +319,7 @@ export function ImportWizardModal({
     setProcessedRows((prev) => prev.filter((row) => row.matchStatus !== 'peso_invalido'))
   }
 
-  // Executa uma operação com até 3 tentativas no total se houver 429 Too Many Requests
+  // Executa uma operação com até 3 tentativas no total se houver 429 Too Many Requests com backoff exponencial
   const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
     let attempt = 0
     while (attempt < maxRetries) {
@@ -335,7 +335,9 @@ export function ImportWizardModal({
             (err as any).status === 429)
 
         if (is429 && attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, 1000))
+          const baseDelay = 1000
+          const delay = baseDelay * Math.pow(2, attempt - 1) // 1s → 2s → 4s
+          await new Promise((resolve) => setTimeout(resolve, delay))
           continue
         }
         throw err
@@ -344,11 +346,11 @@ export function ImportWizardModal({
     throw new Error('Número máximo de tentativas atingido.')
   }
 
-  // Executa uma lista de tarefas em lotes (batch) com delay entre cada lote e paralelismo com Promise.all
+  // Executa uma lista de tarefas de forma sequencial com delay de 150ms entre cada item
   const processInBatches = async <T, R>(
     items: T[],
     batchSize: number,
-    delayMs: number,
+    _delayMs: number,
     task: (item: T) => Promise<R>,
     onBatchComplete?: (completedCount: number, total: number) => void,
   ): Promise<PromiseSettledResult<R>[]> => {
@@ -357,13 +359,19 @@ export function ImportWizardModal({
 
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize)
-      const batchResults = await Promise.allSettled(batch.map((item) => task(item)))
-      results.push(...batchResults)
-      completed += batch.length
-      onBatchComplete?.(Math.min(completed, items.length), items.length)
-
-      if (i + batchSize < items.length && delayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      for (const item of batch) {
+        try {
+          const result = await task(item)
+          results.push({ status: 'fulfilled', value: result } as PromiseFulfilledResult<R>)
+        } catch (err) {
+          results.push({ status: 'rejected', reason: err } as PromiseRejectedResult)
+        }
+        completed++
+        onBatchComplete?.(Math.min(completed, items.length), items.length)
+        // 150ms entre cada item dentro do lote
+        if (completed < items.length) {
+          await new Promise((resolve) => setTimeout(resolve, 150))
+        }
       }
     }
 
@@ -407,8 +415,8 @@ export function ImportWizardModal({
       message: 'Iniciando importação...',
     })
 
-    const BATCH_SIZE = 8
-    const DELAY_MS = 200
+    const BATCH_SIZE = 4
+    const DELAY_MS = 500
 
     try {
       if (substituir) {
