@@ -36,7 +36,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
 
 const SECAO_LABELS: Record<string, string> = {
@@ -63,30 +62,6 @@ export default function PublicLoading() {
   const refreshingRef = useRef(false)
   const [editingItemObs, setEditingItemObs] = useState<{ id: string; text: string } | null>(null)
 
-  const handleRefresh = async (showToast = true) => {
-    if (refreshingRef.current || !romaneio) return
-    refreshingRef.current = true
-    setRefreshing(true)
-    try {
-      const freshProdutos = await getProdutos()
-      const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
-      if (showToast) {
-        toast({
-          title:
-            updatedCount > 0
-              ? `${updatedCount} item(ns) atualizado(s).`
-              : 'Nenhum item precisou de atualização.',
-        })
-      }
-      if (updatedCount > 0) loadData()
-    } catch {
-      if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
-    } finally {
-      refreshingRef.current = false
-      setRefreshing(false)
-    }
-  }
-
   const loadData = async () => {
     if (!id) return
     try {
@@ -107,13 +82,33 @@ export default function PublicLoading() {
     setLoading(false)
   }
 
+  const handleRefresh = async (showToast = true) => {
+    if (refreshingRef.current || !romaneio) return
+    refreshingRef.current = true
+    setRefreshing(true)
+    try {
+      const freshProdutos = await getProdutos()
+      const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
+      await loadData()
+      if (showToast) {
+        toast({
+          title:
+            updatedCount > 0
+              ? `${updatedCount} item(ns) atualizado(s).`
+              : 'Romaneio sincronizado com sucesso.',
+        })
+      }
+    } catch {
+      if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
     loadData()
   }, [id])
-
-  useRealtime('romaneios', () => loadData())
-  useRealtime('romaneio_itens', () => loadData())
-  useRealtime('produtos', () => handleRefresh(false))
 
   if (loading) {
     return (
@@ -173,13 +168,16 @@ export default function PublicLoading() {
   }
 
   const handleToggleCarregado = async (item: RomaneioItem) => {
+    const nextCarregado = !item.carregado
+    setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, carregado: nextCarregado } : i)))
     try {
-      await updateRomaneioItem(item.id, { carregado: !item.carregado })
-      setItens((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, carregado: !i.carregado } : i)),
-      )
+      await updateRomaneioItem(item.id, { carregado: nextCarregado })
     } catch {
-      toast({ title: 'Erro ao atualizar item', variant: 'destructive' })
+      toast({
+        title: 'Sem conexão',
+        description: 'Clique em Atualizar quando estiver online para sincronizar.',
+        variant: 'destructive',
+      })
     }
   }
 
