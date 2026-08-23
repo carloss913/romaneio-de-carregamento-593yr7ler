@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Truck, ChevronRight, FileText, Scale, CheckCircle2, Package, Plus } from 'lucide-react'
 import { Romaneio, RomaneioItem } from '@/types/database'
@@ -16,17 +16,34 @@ export default function Index() {
   const [romaneios, setRomaneios] = useState<Romaneio[]>([])
   const [itens, setItens] = useState<RomaneioItem[]>([])
   const [novoModalOpen, setNovoModalOpen] = useState(false)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const roms = await getRomaneios()
       setRomaneios(roms)
-      const allItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>()
-      setItens(allItens)
-    } catch {
-      /* intentionally ignored */
+      if (roms.length > 0) {
+        const filterStr = roms.map((r) => `romaneio="${r.id}"`).join(' || ')
+        const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
+          filter: filterStr,
+        })
+        setItens(relevantItens)
+      } else {
+        setItens([])
+      }
+    } catch (err) {
+      console.error('Erro ao carregar dados do painel:', err)
     }
-  }
+  }, [])
+
+  const debouncedLoadData = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      loadData()
+    }, 500)
+  }, [loadData])
 
   useEffect(() => {
     // Dispara a rotina de exclusão automática de romaneios finalizados
@@ -36,12 +53,18 @@ export default function Index() {
       .then((excluidos) => {
         if (excluidos > 0) loadData()
       })
-      .catch(() => {})
+      .catch((err) => console.error('Auto-delete falhou:', err))
     loadData()
-  }, [])
 
-  useRealtime('romaneios', () => loadData())
-  useRealtime('romaneio_itens', () => loadData())
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [loadData])
+
+  useRealtime('romaneios', debouncedLoadData)
+  useRealtime('romaneio_itens', debouncedLoadData)
 
   const todayStr = new Date().toISOString().split('T')[0]
   const romaneiosHoje = romaneios.filter((r) => r.data.startsWith(todayStr))

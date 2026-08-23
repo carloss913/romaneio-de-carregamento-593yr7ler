@@ -77,7 +77,7 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
     if (open)
       getProdutos()
         .then(setExisting)
-        .catch(() => {})
+        .catch((err) => console.error('Importação de produtos falhou:', err))
     else reset()
   }, [open])
 
