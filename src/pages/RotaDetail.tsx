@@ -9,7 +9,7 @@ import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { NovoRomaneioModal } from '@/components/NovoRomaneioModal'
 import { useRealtime } from '@/hooks/use-realtime'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,6 @@ import {
 
 export default function RotaDetail() {
   const { rota } = useParams<{ rota: string }>()
-  const { toast } = useToast()
   const rotaDecoded = decodeURIComponent(rota || '') as RotaType
 
   const [romaneios, setRomaneios] = useState<Romaneio[]>([])
@@ -34,10 +33,17 @@ export default function RotaDetail() {
     try {
       const list = await getRomaneiosByRota(rotaDecoded)
       setRomaneios(list)
-      const allItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>()
-      setItens(allItens)
-    } catch {
-      /* intentionally ignored */
+      if (list.length === 0) {
+        setItens([])
+        return
+      }
+      const filter = list.map((r) => `romaneio = "${r.id}"`).join(' || ')
+      const itensList = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
+        filter,
+      })
+      setItens(itensList)
+    } catch (err) {
+      toast.error('Erro ao carregar dados')
     }
   }, [rotaDecoded])
 
@@ -65,7 +71,9 @@ export default function RotaDetail() {
       .then((excluidos) => {
         if (excluidos > 0) loadData()
       })
-      .catch(() => {})
+      .catch((err) => {
+        toast.error('Erro na exclusão automática')
+      })
     loadData()
   }, [loadData])
 
@@ -76,15 +84,11 @@ export default function RotaDetail() {
     if (!deleteDialog.id) return
     try {
       await deleteRomaneio(deleteDialog.id)
-      toast({ title: 'Romaneio excluído', description: 'O carregamento foi removido.' })
+      toast.success('Romaneio excluído')
       setDeleteDialog({ open: false })
       loadData()
     } catch (err) {
-      toast({
-        title: 'Erro ao excluir',
-        description: 'Não foi possível remover o romaneio.',
-        variant: 'destructive',
-      })
+      toast.error('Erro ao excluir romaneio')
     }
   }
 

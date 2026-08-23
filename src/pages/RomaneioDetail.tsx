@@ -58,12 +58,11 @@ import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { PrintManifest } from '@/components/PrintManifest'
 import { ConfigPhoneModal } from '@/components/ConfigPhoneModal'
 import { useRealtime } from '@/hooks/use-realtime'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 export default function RomaneioDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { toast } = useToast()
 
   const [romaneio, setRomaneio] = useState<Romaneio | null>(null)
   const [itens, setItens] = useState<RomaneioItem[]>([])
@@ -88,6 +87,7 @@ export default function RomaneioDetail() {
   const [refreshing, setRefreshing] = useState(false)
   const refreshingRef = useRef(false)
 
+  const initialLoadDoneRef = useRef(false)
   const realtimeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadData = useCallback(async () => {
@@ -107,8 +107,8 @@ export default function RomaneioDetail() {
       } catch {
         /* no config yet */
       }
-    } catch {
-      /* intentionally ignored */
+    } catch (err) {
+      toast.error('Erro ao carregar dados')
     }
   }, [id])
 
@@ -123,25 +123,25 @@ export default function RomaneioDetail() {
         const currentItens = await getRomaneioItens(id)
         const updatedCount = await refreshRomaneioItens(currentItens, freshProdutos)
         if (showToast) {
-          toast({
-            title:
-              updatedCount > 0
-                ? `${updatedCount} item(ns) atualizado(s) com os dados mais recentes.`
-                : 'Nenhum item precisou de atualização.',
-          })
+          toast.success(
+            updatedCount > 0
+              ? `${updatedCount} item(ns) atualizado(s) com os dados mais recentes.`
+              : 'Nenhum item precisou de atualização.',
+          )
         }
         if (updatedCount > 0) loadData()
       } catch {
-        if (showToast) toast({ title: 'Erro ao atualizar romaneio', variant: 'destructive' })
+        if (showToast) toast.error('Erro ao atualizar romaneio')
       } finally {
         refreshingRef.current = false
         setRefreshing(false)
       }
     },
-    [id, loadData, toast],
+    [id, loadData],
   )
 
   const debouncedLoadData = useCallback(() => {
+    if (!initialLoadDoneRef.current) return
     if (realtimeDebounceTimerRef.current) {
       clearTimeout(realtimeDebounceTimerRef.current)
     }
@@ -151,6 +151,7 @@ export default function RomaneioDetail() {
   }, [loadData])
 
   const debouncedHandleRefresh = useCallback(() => {
+    if (!initialLoadDoneRef.current) return
     if (realtimeDebounceTimerRef.current) {
       clearTimeout(realtimeDebounceTimerRef.current)
     }
@@ -168,7 +169,9 @@ export default function RomaneioDetail() {
   }, [])
 
   useEffect(() => {
-    loadData()
+    loadData().then(() => {
+      initialLoadDoneRef.current = true
+    })
   }, [loadData])
 
   useRealtime('romaneios', debouncedLoadData)
@@ -222,13 +225,14 @@ export default function RomaneioDetail() {
     try {
       // If reopening, we keep the conferente or can leave it as is; if finalizing manually in admin without conferente, just update status
       await updateRomaneio(romaneio.id, { status: nextStatus })
-      toast({
-        title: isFinalizado ? 'Romaneio Reaberto' : 'Romaneio Finalizado',
-        description: isFinalizado ? 'Edições liberadas.' : 'Carga bloqueada para alterações.',
-      })
+      toast.success(
+        isFinalizado
+          ? 'Romaneio Reaberto — Edições liberadas.'
+          : 'Romaneio Finalizado — Carga bloqueada para alterações.',
+      )
       loadData()
     } catch {
-      toast({ title: 'Erro ao alterar status', variant: 'destructive' })
+      toast.error('Erro ao alterar status')
     }
   }
 
@@ -253,7 +257,7 @@ export default function RomaneioDetail() {
         caixas: conv.caixas,
         pecas: conv.pecas,
       })
-      toast({ title: 'Item adicionado!' })
+      toast.success('Item adicionado!')
       setManualItemModal(false)
       setSelectedProdutoId('')
       setPesoManual('')
@@ -261,17 +265,17 @@ export default function RomaneioDetail() {
       setShowSugestoes(false)
       loadData()
     } catch {
-      toast({ title: 'Erro ao adicionar item', variant: 'destructive' })
+      toast.error('Erro ao adicionar item')
     }
   }
 
   const handleDeleteItem = async (itemId: string) => {
     try {
       await deleteRomaneioItem(itemId)
-      toast({ title: 'Item removido' })
+      toast.success('Item removido')
       loadData()
-    } catch {
-      /* intentionally ignored */
+    } catch (err) {
+      toast.error('Erro ao excluir item')
     }
   }
 
@@ -281,21 +285,19 @@ export default function RomaneioDetail() {
       setItens((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, carregado: !i.carregado } : i)),
       )
-      toast({
-        title: !item.carregado ? 'Item marcado como carregado' : 'Item desmarcado',
-      })
+      toast.success(!item.carregado ? 'Item marcado como carregado' : 'Item desmarcado')
     } catch {
-      toast({ title: 'Erro ao atualizar item', variant: 'destructive' })
+      toast.error('Erro ao atualizar item')
     }
   }
 
   const handleDeleteRomaneio = async () => {
     try {
       await deleteRomaneio(romaneio.id)
-      toast({ title: 'Romaneio excluído' })
+      toast.success('Romaneio excluído')
       navigate(`/rotas/${encodeURIComponent(romaneio.rota)}`)
-    } catch {
-      /* intentionally ignored */
+    } catch (err) {
+      toast.error('Erro ao excluir romaneio')
     }
   }
 
@@ -303,7 +305,7 @@ export default function RomaneioDetail() {
     const url = `${window.location.origin}/romaneios/${romaneio.id}`
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
-      toast({ title: 'Link copiado!' })
+      toast.success('Link copiado!')
       setTimeout(() => setLinkCopied(false), 2000)
     })
   }
@@ -311,11 +313,7 @@ export default function RomaneioDetail() {
   const handleSendConclusion = () => {
     const phone = configContato.replace(/\D/g, '')
     if (!phone) {
-      toast({
-        title: 'Contato não cadastrado',
-        description: 'Cadastre um telefone de contato na página Contato.',
-        variant: 'destructive',
-      })
+      toast.error('Cadastre um telefone de contato na página Contato.')
       return
     }
     const msg = buildWhatsAppMessage(romaneio, itens, {
@@ -328,11 +326,11 @@ export default function RomaneioDetail() {
   const handleSaveObs = async () => {
     try {
       await updateRomaneio(romaneio.id, { observacoes: obsText })
-      toast({ title: 'Observações salvas!' })
+      toast.success('Observações salvas!')
       setEditingObs(false)
       loadData()
     } catch {
-      toast({ title: 'Erro ao salvar observações', variant: 'destructive' })
+      toast.error('Erro ao salvar observações')
     }
   }
 
@@ -340,11 +338,11 @@ export default function RomaneioDetail() {
     if (!editingItemObs) return
     try {
       await updateRomaneioItem(editingItemObs.id, { observacao: editingItemObs.text })
-      toast({ title: 'Observação do item salva!' })
+      toast.success('Observação do item salva!')
       setEditingItemObs(null)
       loadData()
     } catch {
-      toast({ title: 'Erro ao salvar observação', variant: 'destructive' })
+      toast.error('Erro ao salvar observação')
     }
   }
 
