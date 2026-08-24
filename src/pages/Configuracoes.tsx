@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Save, Trash2, AlertTriangle, Clock } from 'lucide-react'
 import {
   getAutoDeleteMonths,
@@ -19,11 +19,7 @@ import { useToast } from '@/hooks/use-toast'
 export default function Configuracoes() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [meses, setMeses] = useState<number>(0)
-
-  useEffect(() => {
-    setMeses(getAutoDeleteMonths())
-  }, [])
+  const [meses, setMeses] = useState<number>(() => getAutoDeleteMonths())
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
