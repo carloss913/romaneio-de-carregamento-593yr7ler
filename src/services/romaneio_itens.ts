@@ -58,13 +58,7 @@ export const refreshRomaneioItens = async (
     let newCaixas = item.caixas
     let newPecas = item.pecas
 
-    if (
-      produto.peso_caixa_kg &&
-      produto.peso_caixa_kg > 0 &&
-      item.caixas === 0 &&
-      item.pecas === 0 &&
-      item.peso_total_kg > 0
-    ) {
+    if (produto.peso_caixa_kg && produto.peso_caixa_kg > 0 && item.peso_total_kg > 0) {
       const conv = convertWeightToBoxesAndPieces(
         item.peso_total_kg,
         produto.peso_caixa_kg,
@@ -73,7 +67,9 @@ export const refreshRomaneioItens = async (
       )
       newCaixas = conv.caixas
       newPecas = conv.pecas
-      needsUpdate = true
+      if (newCaixas !== item.caixas || newPecas !== item.pecas) {
+        needsUpdate = true
+      }
     }
 
     if (needsUpdate) {
