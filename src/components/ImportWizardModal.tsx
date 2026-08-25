@@ -432,7 +432,7 @@ export function ImportWizardModal({
     })
 
     const BATCH_SIZE = 4
-    const DELAY_MS = 500
+    const DELAY_MS = 300
 
     try {
       if (substituir) {
