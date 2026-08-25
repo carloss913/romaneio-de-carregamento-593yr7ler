@@ -17,6 +17,18 @@ function cellToString(value: unknown): string {
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (value instanceof Date) return value.toLocaleDateString('pt-BR')
+
+  // Trata CellObjects do XLSX (ex: { t: 'n', v: 3 } ou { t: 's', v: 'texto', w: '3,00' })
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    if ('v' in obj && obj.v != null) {
+      return cellToString(obj.v)
+    }
+    if ('w' in obj && obj.w != null) {
+      return String(obj.w)
+    }
+  }
+
   return String(value)
 }
 
