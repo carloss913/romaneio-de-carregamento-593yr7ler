@@ -1,6 +1,6 @@
 import pb from '@/lib/pocketbase/client'
 import { RomaneioItem, Produto } from '@/types/database'
-import { recalculatePesoTotal, convertWeightToBoxesAndPieces } from '@/lib/conversion'
+import { convertWeightToBoxesAndPieces } from '@/lib/conversion'
 
 export const getRomaneioItens = (romaneioId: string) =>
   pb.collection('romaneio_itens').getFullList<RomaneioItem>({
@@ -57,7 +57,6 @@ export const refreshRomaneioItens = async (
     let needsUpdate = false
     let newCaixas = item.caixas
     let newPecas = item.pecas
-    let newPeso = item.peso_total_kg
 
     if (
       produto.peso_caixa_kg &&
@@ -77,21 +76,8 @@ export const refreshRomaneioItens = async (
       needsUpdate = true
     }
 
-    const recalculatedPeso = recalculatePesoTotal(
-      newCaixas,
-      newPecas,
-      produto.peso_caixa_kg,
-      produto.peso_peca_kg,
-    )
-
-    if (recalculatedPeso > 0 && Math.abs(recalculatedPeso - item.peso_total_kg) > 0.01) {
-      newPeso = recalculatedPeso
-      needsUpdate = true
-    }
-
     if (needsUpdate) {
       await updateRomaneioItem(item.id, {
-        peso_total_kg: newPeso,
         caixas: newCaixas,
         pecas: newPecas,
       })
