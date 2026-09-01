@@ -37,6 +37,7 @@ import {
   Trash2,
   AlertCircle,
   Loader2,
+  Edit2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Produto, RomaneioItem, normalizeSecao } from '@/types/database'
@@ -45,7 +46,7 @@ import { convertWeightToBoxesAndPieces, parseBrazilianWeight } from '@/lib/conve
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
 import { updateProduto, createProduto } from '@/services/produtos'
-import { ProdutoModal } from './ProdutoModal'
+import { ProdutoModal, InitialProdutoData } from './ProdutoModal'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { ClientResponseError } from 'pocketbase'
@@ -115,11 +116,13 @@ export function ImportWizardModal({
     message: string
   } | null>(null)
   const [weightAcknowledged, setWeightAcknowledged] = useState(false)
-  const [novoProdutoModal, setNovoProdutoModal] = useState<{
+  const [produtoModalState, setProdutoModalState] = useState<{
     open: boolean
-    initialName: string
+    produto?: Produto | null
+    initialData?: InitialProdutoData | null
     rowId?: string
-  }>({ open: false, initialName: '' })
+    rawCode?: string
+  }>({ open: false })
 
   const blockedRows = processedRows.filter((r) => r.matchStatus === 'peso_invalido')
   const autoCadastrarRows = processedRows.filter((r) => r.matchStatus === 'auto_cadastrar')
@@ -283,14 +286,48 @@ export function ImportWizardModal({
 
   const setRowProduto = (rowId: string, produto: Produto) => {
     setProcessedRows((prev) =>
-      prev.map((row) => (row.id === rowId ? applyConversion(row, produto, row.pesoKg) : row)),
+      prev.map((row) => {
+        // Se a linha tiver o mesmo rowId OU o mesmo código rawCode (caso haja duplicidade/mesmo produto)
+        if (row.id === rowId || (produto.codigo && row.rawCode === produto.codigo)) {
+          return applyConversion(
+            {
+              ...row,
+              nomeFromSheet: produto.nome,
+              marca: produto.marca || row.marca,
+              secao: produto.secao || row.secao,
+            },
+            produto,
+            row.pesoKg,
+          )
+        }
+        return row
+      }),
     )
   }
 
-  const updateRowProduto = (rowId: string, produtoId: string) => {
-    const prod = produtos.find((p) => p.id === produtoId)
-    if (!prod) return
-    setRowProduto(rowId, prod)
+  const handleOpenEditModal = (row: ProcessedRow) => {
+    if (row.matchedProduto) {
+      setProdutoModalState({
+        open: true,
+        produto: row.matchedProduto,
+        initialData: null,
+        rowId: row.id,
+        rawCode: row.rawCode,
+      })
+    } else {
+      setProdutoModalState({
+        open: true,
+        produto: null,
+        initialData: {
+          codigo: row.rawCode,
+          nome: row.nomeFromSheet || row.rawCode,
+          marca: row.marca || '',
+          secao: row.secao || '',
+        },
+        rowId: row.id,
+        rawCode: row.rawCode,
+      })
+    }
   }
 
   const updateRowWeight = (rowId: string, newWeight: number) => {
@@ -829,7 +866,7 @@ export function ImportWizardModal({
                         <TableHead>Marca</TableHead>
                         <TableHead>Resultado</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="w-8"></TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -936,7 +973,9 @@ export function ImportWizardModal({
                               {row.matchStatus === 'auto_cadastrar' && (
                                 <Badge
                                   variant="outline"
-                                  className="text-blue-600 border-blue-400 bg-blue-50"
+                                  onClick={() => handleOpenEditModal(row)}
+                                  className="text-blue-600 border-blue-400 bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                                  title="Clique para completar o cadastro deste produto"
                                 >
                                   <Plus className="w-3 h-3 mr-1" /> Auto-cadastrar
                                 </Badge>
@@ -947,15 +986,42 @@ export function ImportWizardModal({
                                 </Badge>
                               )}
                             </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-slate-300 hover:text-red-500"
-                                onClick={() => removeRow(row.id)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    'h-7 w-7',
+                                    row.matchStatus === 'auto_cadastrar'
+                                      ? 'text-blue-600 hover:bg-blue-50 hover:text-blue-700'
+                                      : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+                                  )}
+                                  title={
+                                    row.matchStatus === 'auto_cadastrar'
+                                      ? 'Cadastrar informações do produto (peso cx, peças, seção...)'
+                                      : 'Editar cadastro do produto'
+                                  }
+                                  onClick={() => handleOpenEditModal(row)}
+                                >
+                                  {row.matchStatus === 'auto_cadastrar' ? (
+                                    <Plus className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  )}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-slate-300 hover:text-red-500 hover:bg-red-50"
+                                  onClick={() => removeRow(row.id)}
+                                  title="Remover item da importação"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -1002,12 +1068,28 @@ export function ImportWizardModal({
                       {autoCadastrarRows.map((row) => (
                         <div
                           key={row.id}
-                          className="text-xs text-blue-800 flex justify-between gap-2"
+                          className="text-xs text-blue-800 flex items-center justify-between gap-2 p-1 rounded hover:bg-blue-100/60"
                         >
-                          <span className="font-medium">
-                            {row.rawCode} — {row.nomeFromSheet || 'Sem descrição'}
-                          </span>
-                          <span className="text-blue-600">{row.marca || 'Sem marca'}</span>
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="font-mono font-bold bg-blue-200/60 px-1 rounded">
+                              {row.rawCode}
+                            </span>
+                            <span className="truncate">{row.nomeFromSheet || 'Sem descrição'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-blue-600 text-[11px]">
+                              {row.marca || 'Sem marca'}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEditModal(row)}
+                              className="h-6 px-2 text-[11px] border-blue-300 text-blue-700 bg-white hover:bg-blue-50"
+                            >
+                              <Edit2 className="w-3 h-3 mr-1" /> Preencher dados
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1197,11 +1279,14 @@ export function ImportWizardModal({
       </Dialog>
 
       <ProdutoModal
-        open={novoProdutoModal.open}
-        onOpenChange={(v: boolean) => setNovoProdutoModal((prev) => ({ ...prev, open: v }))}
-        initialName={novoProdutoModal.initialName}
+        open={produtoModalState.open}
+        onOpenChange={(v: boolean) => setProdutoModalState((prev) => ({ ...prev, open: v }))}
+        produto={produtoModalState.produto}
+        initialData={produtoModalState.initialData}
         onSuccess={(prod: Produto) => {
-          if (novoProdutoModal.rowId) setRowProduto(novoProdutoModal.rowId, prod)
+          if (produtoModalState.rowId) {
+            setRowProduto(produtoModalState.rowId, prod)
+          }
         }}
       />
     </>
