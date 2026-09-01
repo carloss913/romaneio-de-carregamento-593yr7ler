@@ -15,6 +15,7 @@ export const createRomaneioItem = (data: {
   peso_total_kg: number
   caixas: number
   pecas: number
+  observacao?: string
 }) => pb.collection('romaneio_itens').create<RomaneioItem>(data)
 
 export const updateRomaneioItem = (

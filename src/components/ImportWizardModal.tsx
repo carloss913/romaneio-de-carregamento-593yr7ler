@@ -584,6 +584,7 @@ export function ImportWizardModal({
         pesoKg: number
         caixas: number
         pecas: number
+        observacao?: string
       }
 
       const itensToCreate: ItemToCreate[] = []
@@ -596,6 +597,7 @@ export function ImportWizardModal({
             pesoKg: row.pesoKg,
             caixas: row.caixas,
             pecas: row.pecas,
+            observacao: row.weightWarning ? 'conferir peso' : undefined,
           })
         }
       }
@@ -609,6 +611,7 @@ export function ImportWizardModal({
             pesoKg: row.pesoKg,
             caixas: 0,
             pecas: 0,
+            observacao: row.weightWarning ? 'conferir peso' : undefined,
           })
         } else {
           // Se o produto falhou no auto-cadastro, não tenta criar o item no romaneio
@@ -634,6 +637,7 @@ export function ImportWizardModal({
               peso_total_kg: item.pesoKg,
               caixas: item.caixas,
               pecas: item.pecas,
+              ...(item.observacao ? { observacao: item.observacao } : {}),
             }),
           )
         },
@@ -1135,26 +1139,44 @@ export function ImportWizardModal({
                       <AlertTriangle className="w-4 h-4" />
                       Pesos potencialmente incorretos ({weightWarningRows.length}):
                     </div>
-                    <div className="space-y-1 max-h-[120px] overflow-y-auto">
-                      {weightWarningRows.map((row) => (
-                        <div
-                          key={row.id}
-                          className="text-xs text-amber-800 flex justify-between gap-2"
-                        >
-                          <span className="font-medium">
-                            Código {row.rawCode}: {row.pesoKg.toFixed(1)} kg
-                          </span>
-                          <span className="text-amber-600">{row.weightWarningMessage}</span>
-                        </div>
-                      ))}
+                    <div className="space-y-1 max-h-[140px] overflow-y-auto">
+                      {weightWarningRows.map((row) => {
+                        const productName =
+                          row.matchedProduto?.nome || row.nomeFromSheet || 'Sem descrição'
+                        return (
+                          <div
+                            key={row.id}
+                            className="text-xs text-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-1 rounded bg-amber-100/50"
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="font-mono font-bold bg-amber-200/80 px-1 rounded shrink-0">
+                                {row.rawCode}
+                              </span>
+                              <span
+                                className="font-semibold text-slate-800 truncate"
+                                title={productName}
+                              >
+                                {productName}
+                              </span>
+                              <span className="text-amber-900 font-medium shrink-0">
+                                ({row.pesoKg.toFixed(1)} kg)
+                              </span>
+                            </div>
+                            <span className="text-amber-700 text-[11px] shrink-0 font-normal">
+                              {row.weightWarningMessage}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                     <label className="flex items-center gap-2 cursor-pointer pt-1">
                       <Checkbox
                         checked={weightAcknowledged}
                         onCheckedChange={(v) => setWeightAcknowledged(!!v)}
                       />
-                      <span className="text-xs text-amber-800">
-                        Confirmo que revisei os pesos e estão corretos
+                      <span className="text-xs text-amber-800 font-medium">
+                        Confirmo que revisei os pesos e estão corretos (será gravada a observação
+                        "conferir peso")
                       </span>
                     </label>
                   </div>
@@ -1228,10 +1250,11 @@ export function ImportWizardModal({
           </div>
 
           <DialogFooter className="pt-3 border-t">
-            {step > 1 && step < 4 && (
+            {step > 1 && (
               <Button
                 type="button"
                 variant="outline"
+                disabled={loading}
                 onClick={() => setStep((s) => (s - 1) as any)}
               >
                 Voltar
