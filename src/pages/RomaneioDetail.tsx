@@ -707,7 +707,6 @@ export default function RomaneioDetail() {
                   <TableHead>Marca</TableHead>
                   <TableHead className="text-right">Peso Total (kg)</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
-                  <TableHead>Obs.</TableHead>
                   <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
               </TableHeader>

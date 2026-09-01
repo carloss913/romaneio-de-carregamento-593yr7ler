@@ -170,12 +170,22 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
       </TableCell>
       <TableCell
         style={localHeight ? { height: `${localHeight}px` } : undefined}
-        className={`font-bold text-slate-800 align-top pt-3 pb-3 ${
-          item.carregado ? 'line-through text-slate-400' : ''
-        }`}
+        className="align-top pt-3 pb-3"
       >
         <div className="flex flex-col">
-          <span>{prod?.nome || 'Produto'}</span>
+          <span
+            className={`font-bold text-slate-800 ${
+              item.carregado ? 'line-through text-slate-400' : ''
+            }`}
+          >
+            {prod?.nome || 'Produto'}
+          </span>
+          {item.observacao && item.observacao.trim() ? (
+            <div className="mt-1 inline-flex items-start gap-1 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/70 rounded-md px-2 py-0.5 w-fit max-w-full">
+              <span className="font-semibold text-amber-800 shrink-0">Obs:</span>
+              <span className="break-words">{item.observacao.trim()}</span>
+            </div>
+          ) : null}
           {hasCustomHeight && (
             <span className="text-[10px] font-normal text-slate-400 mt-1 italic print:hidden">
               (Linha expandida: {localHeight}px)
@@ -200,12 +210,6 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
         className="text-right font-black text-slate-900 align-top pt-3 pb-3"
       >
         {getItemQuantidade(item)}
-      </TableCell>
-      <TableCell
-        style={localHeight ? { height: `${localHeight}px` } : undefined}
-        className="text-xs text-slate-500 max-w-[160px] truncate align-top pt-3 pb-3"
-      >
-        {item.observacao || '-'}
       </TableCell>
       <TableCell
         style={localHeight ? { height: `${localHeight}px` } : undefined}

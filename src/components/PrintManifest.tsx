@@ -69,7 +69,6 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             <th className="py-1.5 px-1">Descrição do Produto</th>
             <th className="py-1.5 px-1 text-right w-20">Peso (kg)</th>
             <th className="py-1.5 px-1 text-right w-24">Quantidade</th>
-            <th className="py-1.5 px-1 w-24">Obs.</th>
           </tr>
         </thead>
         <tbody>
@@ -107,13 +106,21 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                 </td>
                 <td
                   style={customHeight ? { height: `${customHeight}px` } : undefined}
-                  className="py-1.5 px-1 font-semibold text-black align-top text-[11px]"
+                  className="py-1.5 px-1 align-top text-[11px]"
                 >
-                  <span>{prod?.nome || 'Produto'}</span>
-                  {prod?.marca ? (
-                    <span className="text-[11px] text-slate-600 font-normal ml-1">
-                      ({prod.marca})
-                    </span>
+                  <div>
+                    <span className="font-semibold text-black">{prod?.nome || 'Produto'}</span>
+                    {prod?.marca ? (
+                      <span className="text-[11px] text-slate-600 font-normal ml-1">
+                        ({prod.marca})
+                      </span>
+                    ) : null}
+                  </div>
+                  {item.observacao && item.observacao.trim() ? (
+                    <div className="text-[10px] text-slate-700 italic mt-0.5 leading-tight">
+                      <strong className="font-semibold not-italic">Obs:</strong>{' '}
+                      {item.observacao.trim()}
+                    </div>
                   ) : null}
                 </td>
                 <td
@@ -128,12 +135,6 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                 >
                   {getItemQuantidade(item)}
                 </td>
-                <td
-                  style={customHeight ? { height: `${customHeight}px` } : undefined}
-                  className="py-1.5 px-1 text-[11px] text-slate-600 align-top truncate max-w-[100px]"
-                >
-                  {item.observacao || '-'}
-                </td>
               </tr>
             )
           })}
@@ -143,14 +144,14 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             <td colSpan={2} className="py-1.5 px-1 uppercase">
               TOTAL: {itens.length} ITENS
             </td>
-            <td className="hidden print:hidden py-1.5 px-1 text-right tabular-nums whitespace-nowrap">
+            <td className="py-1.5 px-1"></td>
+            <td className="py-1.5 px-1 text-right tabular-nums whitespace-nowrap">
               {totalPeso.toFixed(1)} kg
             </td>
             <td className="py-1.5 px-1 text-right text-black font-bold text-[11px]">
               {totalCaixas > 0 && `${totalCaixas} cx `}
               {totalPecas > 0 && `${totalPecas} pct`}
             </td>
-            <td className="py-1.5 px-1 text-right"></td>
           </tr>
         </tfoot>
       </table>
