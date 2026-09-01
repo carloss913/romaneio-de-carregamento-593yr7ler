@@ -37,6 +37,7 @@ export interface RomaneioItem extends RecordModel {
   pecas: number
   carregado: boolean
   observacao?: string
+  altura_linha?: number
   expand?: {
     produto?: Produto
     romaneio?: Romaneio

@@ -62,6 +62,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ImportWizardModal } from '@/components/ImportWizardModal'
 import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { PrintManifest } from '@/components/PrintManifest'
+import { ResizableTableRow } from '@/components/ResizableTableRow'
 import { useRealtime } from '@/hooks/use-realtime'
 import { toast } from 'sonner'
 
@@ -305,6 +306,23 @@ export default function RomaneioDetail() {
       toast.success(!item.carregado ? 'Item marcado como carregado' : 'Item desmarcado')
     } catch {
       toast.error('Erro ao atualizar item')
+    }
+  }
+
+  const handleUpdateRowHeight = async (itemId: string, height: number | null) => {
+    // Atualização otimista imediata do estado local
+    setItens((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, altura_linha: height || undefined } : i)),
+    )
+    try {
+      await updateRomaneioItem(itemId, { altura_linha: height })
+      if (height) {
+        toast.success(`Altura da linha ajustada para ${height}px`)
+      } else {
+        toast.success('Altura da linha restaurada ao padrão')
+      }
+    } catch {
+      toast.error('Erro ao salvar altura da linha')
     }
   }
 
@@ -694,116 +712,23 @@ export default function RomaneioDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedItens.map((item) => {
-                  const prod = item.expand?.produto
-                  const currentSecao = prod?.secao
-                  const displaySecao = currentSecao ? currentSecao : '—'
-
-                  return (
-                    <TableRow key={item.id} className={item.carregado ? 'opacity-50' : ''}>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center">
-                          <Checkbox
-                            checked={item.carregado}
-                            onCheckedChange={() => handleToggleCarregado(item)}
-                            disabled={isFinalizado}
-                            className={
-                              item.carregado ? 'border-emerald-500 bg-emerald-500 text-white' : ''
-                            }
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
-                        {prod?.codigo || '-'}
-                      </TableCell>
-                      <TableCell className="min-w-[130px]">
-                        {isFinalizado || !prod ? (
-                          <span
-                            className={
-                              currentSecao
-                                ? `inline-flex items-center px-2 py-0.5 rounded border ${getSecaoBadgeClass(currentSecao)}`
-                                : 'text-slate-300 font-medium'
-                            }
-                          >
-                            {displaySecao}
-                          </span>
-                        ) : (
-                          <Select
-                            value={currentSecao || '__NONE'}
-                            onValueChange={(val) => handleUpdateSecao(prod.id, val)}
-                            disabled={updatingSecaoProdId === prod.id}
-                          >
-                            <SelectTrigger
-                              className={`h-7 text-xs px-2 py-0.5 rounded border border-slate-200/80 bg-white shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-orange-400 w-auto min-w-[110px] ${
-                                currentSecao
-                                  ? getSecaoBadgeClass(currentSecao)
-                                  : 'text-slate-400 font-normal'
-                              }`}
-                            >
-                              <SelectValue placeholder="—">
-                                {currentSecao ? (
-                                  currentSecao
-                                ) : (
-                                  <span className="text-slate-300">—</span>
-                                )}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="CONGELADO">CONGELADO</SelectItem>
-                              <SelectItem value="GERAL">GERAL</SelectItem>
-                              <SelectItem value="RESFRIADO">RESFRIADO</SelectItem>
-                              <SelectItem value="__NONE">Outros</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </TableCell>
-                      <TableCell
-                        className={`font-bold text-slate-800 ${
-                          item.carregado ? 'line-through text-slate-400' : ''
-                        }`}
-                      >
-                        {prod?.nome || 'Produto'}
-                      </TableCell>
-                      <TableCell className="text-slate-600 text-sm">{prod?.marca || '-'}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {item.peso_total_kg.toFixed(1)} kg
-                      </TableCell>
-                      <TableCell className="text-right font-black text-slate-900">
-                        {getItemQuantidade(item)}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-500 max-w-[160px] truncate">
-                        {item.observacao || '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {!isFinalizado && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setEditingItemObs({ id: item.id, text: item.observacao || '' })
-                              }
-                              className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-8 w-8"
-                              title="Editar observação do item"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {!isFinalizado && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteItem(item.id)}
-                              className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                {sortedItens.map((item) => (
+                  <ResizableTableRow
+                    key={item.id}
+                    item={item}
+                    isFinalizado={isFinalizado}
+                    updatingSecaoProdId={updatingSecaoProdId}
+                    getSecaoBadgeClass={getSecaoBadgeClass}
+                    getItemQuantidade={getItemQuantidade}
+                    onToggleCarregado={handleToggleCarregado}
+                    onUpdateSecao={handleUpdateSecao}
+                    onEditItemObs={(it) =>
+                      setEditingItemObs({ id: it.id, text: it.observacao || '' })
+                    }
+                    onDeleteItem={handleDeleteItem}
+                    onUpdateRowHeight={handleUpdateRowHeight}
+                  />
+                ))}
               </TableBody>
             </Table>
           )}

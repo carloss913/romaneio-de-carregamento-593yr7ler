@@ -76,23 +76,39 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
           {itens.map((item, idx) => {
             const prod = item.expand?.produto
             const secao = prod?.secao || '-'
+            const customHeight =
+              item.altura_linha && item.altura_linha > 0 ? item.altura_linha : undefined
             return (
               <tr
                 key={item.id || idx}
+                style={
+                  customHeight
+                    ? { height: `${customHeight}px`, minHeight: `${customHeight}px` }
+                    : undefined
+                }
                 className={`border-b border-slate-200 print-row ${
                   idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'
                 }`}
               >
-                <td className="py-1.5 px-1 text-center align-middle font-bold text-[11px]">
+                <td
+                  style={customHeight ? { height: `${customHeight}px` } : undefined}
+                  className="py-1.5 px-1 text-center align-top font-bold text-[11px]"
+                >
                   {item.carregado ? '✓' : '□'}
                 </td>
-                <td className="py-1.5 px-1 text-slate-700 font-mono text-[11px] tabular-nums align-middle">
+                <td
+                  style={customHeight ? { height: `${customHeight}px` } : undefined}
+                  className="py-1.5 px-1 text-slate-700 font-mono text-[11px] tabular-nums align-top"
+                >
                   {prod?.codigo || '-'}
                 </td>
-                <td className="hidden print:hidden py-1.5 px-1 text-slate-700 text-[11px] uppercase font-semibold align-middle truncate max-w-[80px]">
+                <td className="hidden print:hidden py-1.5 px-1 text-slate-700 text-[11px] uppercase font-semibold align-top truncate max-w-[80px]">
                   {secao}
                 </td>
-                <td className="py-1.5 px-1 font-semibold text-black align-middle text-[11px]">
+                <td
+                  style={customHeight ? { height: `${customHeight}px` } : undefined}
+                  className="py-1.5 px-1 font-semibold text-black align-top text-[11px]"
+                >
                   <span>{prod?.nome || 'Produto'}</span>
                   {prod?.marca ? (
                     <span className="text-[11px] text-slate-600 font-normal ml-1">
@@ -100,13 +116,22 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                     </span>
                   ) : null}
                 </td>
-                <td className="py-1.5 px-1 text-right tabular-nums align-middle whitespace-nowrap text-[11px]">
+                <td
+                  style={customHeight ? { height: `${customHeight}px` } : undefined}
+                  className="py-1.5 px-1 text-right tabular-nums align-top whitespace-nowrap text-[11px]"
+                >
                   {item.peso_total_kg.toFixed(1)} kg
                 </td>
-                <td className="py-1.5 px-1 text-right font-bold text-black align-middle whitespace-nowrap text-[11px]">
+                <td
+                  style={customHeight ? { height: `${customHeight}px` } : undefined}
+                  className="py-1.5 px-1 text-right font-bold text-black align-top whitespace-nowrap text-[11px]"
+                >
                   {getItemQuantidade(item)}
                 </td>
-                <td className="py-1.5 px-1 text-[11px] text-slate-600 align-middle truncate max-w-[100px]">
+                <td
+                  style={customHeight ? { height: `${customHeight}px` } : undefined}
+                  className="py-1.5 px-1 text-[11px] text-slate-600 align-top truncate max-w-[100px]"
+                >
                   {item.observacao || '-'}
                 </td>
               </tr>

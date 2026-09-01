@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T14:13:43.029Z",
+  "generatedAt": "2026-09-01T14:37:49.773Z",
   "collections": [
     {
       "name": "users",
@@ -259,6 +259,12 @@
         {
           "name": "observacao",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "altura_linha",
+          "type": "number",
           "required": false,
           "system": false
         }
