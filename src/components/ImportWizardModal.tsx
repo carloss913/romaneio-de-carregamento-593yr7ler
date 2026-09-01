@@ -45,7 +45,7 @@ import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
 import { convertWeightToBoxesAndPieces, parseBrazilianWeight } from '@/lib/conversion'
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
-import { updateProduto, createProduto } from '@/services/produtos'
+import { updateProduto, createProduto, getProdutos } from '@/services/produtos'
 import { ProdutoModal, InitialProdutoData } from './ProdutoModal'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
@@ -206,82 +206,100 @@ export function ImportWizardModal({
     }
   }
 
-  const processSheetRows = () => {
+  const processSheetRows = async () => {
     if (!parsedData || !colProduto || !colPeso) return
-    const aggregated: Record<
-      string,
-      { rawCode: string; pesoTotal: number; marca: string; nome: string; secao: string }
-    > = {}
+    setLoading(true)
+    let produtosAtuais = produtos
+    try {
+      produtosAtuais = await getProdutos()
+    } catch (err) {
+      toast({
+        title: 'Erro ao buscar produtos',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
+      setLoading(false)
+      return
+    }
 
-    parsedData.rows.forEach((row) => {
-      const code = (row[colProduto] || '').trim()
-      const weightRaw = row[colPeso] || ''
-      if (!code) return
-      const weight = parseBrazilianWeight(weightRaw)
-      const marcaVal = colMarca ? (row[colMarca] || '').trim() : ''
-      const nomeVal = colNome ? (row[colNome] || '').trim() : ''
-      const rawSecao = colSecao ? (row[colSecao] || '').trim() : ''
-      const secaoVal = normalizeSecao(rawSecao) || rawSecao
-      if (aggregated[code]) {
-        aggregated[code].pesoTotal += weight
-        if (marcaVal && !aggregated[code].marca) {
-          aggregated[code].marca = marcaVal
-        }
-        if (nomeVal && !aggregated[code].nome) {
-          aggregated[code].nome = nomeVal
-        }
-        if (secaoVal && (!aggregated[code].secao || !normalizeSecao(aggregated[code].secao))) {
-          aggregated[code].secao = secaoVal
-        }
-      } else {
-        aggregated[code] = {
-          rawCode: code,
-          pesoTotal: weight,
-          marca: marcaVal,
-          nome: nomeVal,
-          secao: secaoVal,
-        }
-      }
-    })
+    try {
+      const aggregated: Record<
+        string,
+        { rawCode: string; pesoTotal: number; marca: string; nome: string; secao: string }
+      > = {}
 
-    const rows: ProcessedRow[] = Object.entries(aggregated).map(([code, item], idx) => {
-      const matched = produtos.find((p) => p.ativo && p.codigo && p.codigo.trim() === code)
-      const pesoKg = item.pesoTotal
+      parsedData.rows.forEach((row) => {
+        const code = (row[colProduto] || '').trim()
+        const weightRaw = row[colPeso] || ''
+        if (!code) return
+        const weight = parseBrazilianWeight(weightRaw)
+        const marcaVal = colMarca ? (row[colMarca] || '').trim() : ''
+        const nomeVal = colNome ? (row[colNome] || '').trim() : ''
+        const rawSecao = colSecao ? (row[colSecao] || '').trim() : ''
+        const secaoVal = normalizeSecao(rawSecao) || rawSecao
+        if (aggregated[code]) {
+          aggregated[code].pesoTotal += weight
+          if (marcaVal && !aggregated[code].marca) {
+            aggregated[code].marca = marcaVal
+          }
+          if (nomeVal && !aggregated[code].nome) {
+            aggregated[code].nome = nomeVal
+          }
+          if (secaoVal && (!aggregated[code].secao || !normalizeSecao(aggregated[code].secao))) {
+            aggregated[code].secao = secaoVal
+          }
+        } else {
+          aggregated[code] = {
+            rawCode: code,
+            pesoTotal: weight,
+            marca: marcaVal,
+            nome: nomeVal,
+            secao: secaoVal,
+          }
+        }
+      })
 
-      if (!matched) {
-        return {
+      const rows: ProcessedRow[] = Object.entries(aggregated).map(([code, item], idx) => {
+        const matched = produtosAtuais.find((p) => p.ativo && p.codigo && p.codigo.trim() === code)
+        const pesoKg = item.pesoTotal
+
+        if (!matched) {
+          return {
+            id: `row-${idx}`,
+            rawCode: item.rawCode,
+            pesoKg,
+            nomeFromSheet: item.nome || item.rawCode,
+            marca: item.marca,
+            secao: item.secao,
+            matchStatus: pesoKg <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
+            weightWarning: false,
+            caixas: 0,
+            pecas: 0,
+            textoFormatado: pesoKg > 0 ? `${pesoKg.toFixed(1)} kg` : 'Peso inválido',
+          }
+        }
+
+        const baseRow: ProcessedRow = {
           id: `row-${idx}`,
           rawCode: item.rawCode,
           pesoKg,
-          nomeFromSheet: item.nome || item.rawCode,
           marca: item.marca,
           secao: item.secao,
-          matchStatus: pesoKg <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
+          matchStatus: 'ok' as const,
           weightWarning: false,
           caixas: 0,
           pecas: 0,
-          textoFormatado: pesoKg > 0 ? `${pesoKg.toFixed(1)} kg` : 'Peso inválido',
+          textoFormatado: '',
         }
-      }
+        return applyConversion(baseRow, matched, pesoKg)
+      })
 
-      const baseRow: ProcessedRow = {
-        id: `row-${idx}`,
-        rawCode: item.rawCode,
-        pesoKg,
-        marca: item.marca,
-        secao: item.secao,
-        matchStatus: 'ok' as const,
-        weightWarning: false,
-        caixas: 0,
-        pecas: 0,
-        textoFormatado: '',
-      }
-      return applyConversion(baseRow, matched, pesoKg)
-    })
-
-    setProcessedRows(rows)
-    setWeightAcknowledged(false)
-    setStep(3)
+      setProcessedRows(rows)
+      setWeightAcknowledged(false)
+      setStep(3)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const setRowProduto = (rowId: string, produto: Produto) => {
@@ -1264,9 +1282,19 @@ export function ImportWizardModal({
               <Button
                 type="button"
                 onClick={processSheetRows}
+                disabled={loading}
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
-                Processar Colunas <ArrowRight className="w-4 h-4 ml-1" />
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Buscando produtos...
+                  </>
+                ) : (
+                  <>
+                    Processar Colunas <ArrowRight className="w-4 h-4 ml-1" />
+                  </>
+                )}
               </Button>
             )}
             {step === 3 && (
