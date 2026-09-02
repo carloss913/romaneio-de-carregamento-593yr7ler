@@ -309,7 +309,7 @@ export function ImportWizardModal({
       prev.map((row) => {
         // Se a linha tiver o mesmo rowId OU o mesmo código rawCode (caso haja duplicidade/mesmo produto)
         if (row.id === rowId || (produto.codigo && row.rawCode === produto.codigo)) {
-          return applyConversion(
+          const updated = applyConversion(
             {
               ...row,
               nomeFromSheet: produto.nome,
@@ -319,6 +319,11 @@ export function ImportWizardModal({
             produto,
             row.pesoKg,
           )
+          return {
+            ...updated,
+            weightInputStr: row.weightInputStr,
+            isManuallyFixed: row.isManuallyFixed,
+          }
         }
         return row
       }),
@@ -355,12 +360,12 @@ export function ImportWizardModal({
       prev.map((row) => {
         if (row.id !== rowId) return row
 
-        const cleanVal = rawInput.replace(',', '.')
-        const parsed = parseFloat(cleanVal)
-        const hasValidNumber = !isNaN(parsed) && cleanVal.trim() !== ''
+        const trimmed = rawInput.trim()
+        const parsed = parseBrazilianWeight(rawInput)
+        const hasValidNumber = trimmed !== '' && !isNaN(parsed) && parsed > 0
 
         if (!hasValidNumber) {
-          // Campo vazio ou string inválida enquanto digita
+          // Campo vazio, zero ou string inválida enquanto digita
           return {
             ...row,
             pesoKg: 0,
@@ -381,8 +386,8 @@ export function ImportWizardModal({
             ...row,
             pesoKg: newWeight,
             weightInputStr: rawInput,
-            matchStatus: newWeight <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
-            textoFormatado: newWeight > 0 ? `${formatWeight(newWeight)} kg` : 'Peso inválido',
+            matchStatus: 'auto_cadastrar' as const,
+            textoFormatado: `${formatWeight(newWeight)} kg`,
             isManuallyFixed: true,
           }
         }
@@ -499,12 +504,16 @@ export function ImportWizardModal({
       return
     }
 
-    const valid = processedRows.filter((r) => r.matchStatus === 'ok' && r.matchedProduto)
-    const toAutoCreate = processedRows.filter((r) => r.matchStatus === 'auto_cadastrar')
+    const valid = processedRows.filter(
+      (r) => r.matchStatus === 'ok' && r.matchedProduto && r.pesoKg > 0,
+    )
+    const toAutoCreate = processedRows.filter(
+      (r) => r.matchStatus === 'auto_cadastrar' && r.pesoKg > 0,
+    )
     if (valid.length === 0 && toAutoCreate.length === 0) {
       toast({
         title: 'Nenhum item válido',
-        description: 'Associe ao menos um produto antes de confirmar.',
+        description: 'Associe ao menos um produto e informe um peso válido antes de confirmar.',
         variant: 'destructive',
       })
       return
@@ -641,13 +650,15 @@ export function ImportWizardModal({
 
       for (const row of valid) {
         if (row.matchedProduto) {
+          const finalPeso = row.pesoKg
+          const needsConferirPeso = row.weightWarning || row.isManuallyFixed
           itensToCreate.push({
             row,
             produtoId: row.matchedProduto.id,
-            pesoKg: row.pesoKg,
+            pesoKg: finalPeso,
             caixas: row.caixas,
             pecas: row.pecas,
-            observacao: row.weightWarning ? 'conferir peso' : undefined,
+            observacao: needsConferirPeso ? 'conferir peso' : undefined,
           })
         }
       }
@@ -655,13 +666,15 @@ export function ImportWizardModal({
       for (const row of toAutoCreate) {
         const novoProduto = autoCreatedMap.get(row.id)
         if (novoProduto) {
+          const finalPeso = row.pesoKg
+          const needsConferirPeso = row.weightWarning || row.isManuallyFixed
           itensToCreate.push({
             row,
             produtoId: novoProduto.id,
-            pesoKg: row.pesoKg,
+            pesoKg: finalPeso,
             caixas: 0,
             pecas: 0,
-            observacao: row.weightWarning ? 'conferir peso' : undefined,
+            observacao: needsConferirPeso ? 'conferir peso' : undefined,
           })
         } else {
           // Se o produto falhou no auto-cadastro, não tenta criar o item no romaneio
