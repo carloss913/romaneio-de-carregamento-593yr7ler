@@ -74,6 +74,7 @@ interface ProcessedRow {
   textoFormatado: string
   marca?: string
   secao?: string
+  isManuallyFixed?: boolean
 }
 
 // Mapeamento de colunas (índices 0-based) conforme a quantidade de páginas da exportação.
@@ -358,9 +359,14 @@ export function ImportWizardModal({
             pesoKg: newWeight,
             matchStatus: newWeight <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
             textoFormatado: newWeight > 0 ? `${formatWeight(newWeight)} kg` : 'Peso inválido',
+            isManuallyFixed: true,
           }
         }
-        return applyConversion(row, row.matchedProduto, newWeight)
+        const updated = applyConversion(row, row.matchedProduto, newWeight)
+        return {
+          ...updated,
+          isManuallyFixed: true,
+        }
       }),
     )
     setWeightAcknowledged(false)
@@ -947,19 +953,21 @@ export function ImportWizardModal({
                               )}
                             </TableCell>
                             <TableCell>
-                              {row.weightWarning || row.matchStatus === 'peso_invalido' ? (
+                              {row.weightWarning ||
+                              row.matchStatus === 'peso_invalido' ||
+                              row.isManuallyFixed ? (
                                 <Input
                                   type="number"
                                   step="any"
-                                  value={row.pesoKg || ''}
-                                  onChange={(e) =>
-                                    updateRowWeight(
-                                      row.id,
-                                      e.target.value === '' ? 0 : Number(e.target.value),
-                                    )
-                                  }
+                                  value={row.pesoKg === 0 ? '' : row.pesoKg}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    const num = val === '' ? 0 : parseFloat(val)
+                                    updateRowWeight(row.id, isNaN(num) ? 0 : num)
+                                  }}
                                   className="h-7 text-xs w-24 font-medium border-amber-400 bg-amber-50/60 focus-visible:ring-amber-500"
-                                  title="Editar peso deste item suspeito (kg)"
+                                  title="Editar peso deste item (kg)"
+                                  placeholder="0.000"
                                 />
                               ) : (
                                 <span className="font-medium text-slate-700 text-xs px-1">
@@ -1203,13 +1211,12 @@ export function ImportWizardModal({
                               <Input
                                 type="number"
                                 step="any"
-                                value={row.pesoKg || ''}
-                                onChange={(e) =>
-                                  updateRowWeight(
-                                    row.id,
-                                    e.target.value === '' ? 0 : Number(e.target.value),
-                                  )
-                                }
+                                value={row.pesoKg === 0 ? '' : row.pesoKg}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  const num = val === '' ? 0 : parseFloat(val)
+                                  updateRowWeight(row.id, isNaN(num) ? 0 : num)
+                                }}
                                 className="h-7 w-24 text-xs font-semibold bg-white border-amber-400 focus-visible:ring-amber-500 shadow-sm"
                                 placeholder="0.000"
                               />
