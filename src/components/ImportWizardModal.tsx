@@ -947,18 +947,25 @@ export function ImportWizardModal({
                               )}
                             </TableCell>
                             <TableCell>
-                              <Input
-                                type="number"
-                                step="any"
-                                value={row.pesoKg || ''}
-                                onChange={(e) =>
-                                  updateRowWeight(
-                                    row.id,
-                                    e.target.value === '' ? 0 : Number(e.target.value),
-                                  )
-                                }
-                                className="h-7 text-xs w-20"
-                              />
+                              {row.weightWarning || row.matchStatus === 'peso_invalido' ? (
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  value={row.pesoKg || ''}
+                                  onChange={(e) =>
+                                    updateRowWeight(
+                                      row.id,
+                                      e.target.value === '' ? 0 : Number(e.target.value),
+                                    )
+                                  }
+                                  className="h-7 text-xs w-24 font-medium border-amber-400 bg-amber-50/60 focus-visible:ring-amber-500"
+                                  title="Editar peso deste item suspeito (kg)"
+                                />
+                              ) : (
+                                <span className="font-medium text-slate-700 text-xs px-1">
+                                  {formatWeight(row.pesoKg)}
+                                </span>
+                              )}
                             </TableCell>
                             <TableCell>
                               {row.matchedProduto ? (
@@ -1164,25 +1171,49 @@ export function ImportWizardModal({
                         return (
                           <div
                             key={row.id}
-                            className="text-xs text-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-1 rounded bg-amber-100/50"
+                            className="text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-amber-100/60 border border-amber-200"
                           >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="font-mono font-bold bg-amber-200/80 px-1 rounded shrink-0">
-                                {row.rawCode}
-                              </span>
-                              <span
-                                className="font-semibold text-slate-800 truncate"
-                                title={productName}
-                              >
-                                {productName}
-                              </span>
-                              <span className="text-amber-900 font-medium shrink-0">
-                                ({formatWeight(row.pesoKg)} kg)
-                              </span>
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="font-mono font-bold bg-amber-200/90 text-amber-900 px-1.5 py-0.5 rounded text-[11px] shrink-0">
+                                  {row.rawCode}
+                                </span>
+                                <span
+                                  className="font-semibold text-slate-800 truncate"
+                                  title={productName}
+                                >
+                                  {productName}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-amber-800">
+                                <span className="font-medium text-orange-700">
+                                  {row.textoFormatado}
+                                </span>
+                                <span>•</span>
+                                <span className="truncate text-amber-700 font-normal">
+                                  {row.weightWarningMessage}
+                                </span>
+                              </div>
                             </div>
-                            <span className="text-amber-700 text-[11px] shrink-0 font-normal">
-                              {row.weightWarningMessage}
-                            </span>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Label className="text-[11px] text-amber-900 font-semibold whitespace-nowrap">
+                                Peso (kg):
+                              </Label>
+                              <Input
+                                type="number"
+                                step="any"
+                                value={row.pesoKg || ''}
+                                onChange={(e) =>
+                                  updateRowWeight(
+                                    row.id,
+                                    e.target.value === '' ? 0 : Number(e.target.value),
+                                  )
+                                }
+                                className="h-7 w-24 text-xs font-semibold bg-white border-amber-400 focus-visible:ring-amber-500 shadow-sm"
+                                placeholder="0.000"
+                              />
+                            </div>
                           </div>
                         )
                       })}
