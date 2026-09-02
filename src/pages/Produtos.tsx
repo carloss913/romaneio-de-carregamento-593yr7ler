@@ -10,6 +10,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { Produto } from '@/types/database'
+import { formatWeight } from '@/lib/conversion'
 import { getProdutos, updateProduto, deleteProduto } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
 import pb from '@/lib/pocketbase/client'
@@ -230,13 +231,13 @@ export default function Produtos() {
                   <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
                   <TableCell className="text-slate-600 text-sm">{p.marca || '-'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {p.peso_caixa_kg ? p.peso_caixa_kg.toFixed(1) + ' kg' : '-'}
+                    {p.peso_caixa_kg ? formatWeight(p.peso_caixa_kg) + ' kg' : '-'}
                   </TableCell>
                   <TableCell className="text-center font-semibold tabular-nums">
                     {p.pecas_por_caixa || '-'}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums text-slate-600">
-                    {p.peso_peca_kg ? p.peso_peca_kg.toFixed(2) + ' kg' : '-'}
+                    {p.peso_peca_kg ? formatWeight(p.peso_peca_kg) + ' kg' : '-'}
                   </TableCell>
                   <TableCell className="text-center">
                     {p.ativo ? (

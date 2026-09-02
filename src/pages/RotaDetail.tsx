@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
 import { RotaType, Romaneio, RomaneioItem } from '@/types/database'
+import { formatWeight } from '@/lib/conversion'
 import { getRomaneiosByRota, deleteRomaneio } from '@/services/romaneios'
 import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
@@ -133,7 +134,7 @@ export default function RotaDetail() {
               <RouteBadge rota={rotaDecoded} />
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              {romaneios.length} romaneios cadastrados • {totalKg.toFixed(1)} kg total
+              {romaneios.length} romaneios cadastrados • {formatWeight(totalKg)} kg total
             </p>
           </div>
         </div>
@@ -224,7 +225,7 @@ export default function RotaDetail() {
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                     <div className="text-xs text-slate-500 space-x-2">
                       <span className="font-bold text-slate-800 tabular-nums">
-                        {pesoRom.toFixed(1)} kg
+                        {formatWeight(pesoRom)} kg
                       </span>
                       <span>•</span>
                       <span>{caixasRom} cx</span>

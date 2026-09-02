@@ -20,7 +20,7 @@ import {
 } from '@/services/romaneio_itens'
 import { getProdutos } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
-import { formatBoxesAndPieces } from '@/lib/conversion'
+import { formatBoxesAndPieces, formatWeight } from '@/lib/conversion'
 import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -181,7 +181,7 @@ export default function PublicLoading() {
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
-      return `${item.peso_total_kg.toFixed(1)} kg`
+      return `${formatWeight(item.peso_total_kg)} kg`
     }
     return formatBoxesAndPieces(item.caixas, item.pecas)
   }

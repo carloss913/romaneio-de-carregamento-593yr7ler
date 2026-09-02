@@ -1,5 +1,5 @@
 import { Romaneio, RomaneioItem } from '@/types/database'
-import { formatBoxesAndPieces } from '@/lib/conversion'
+import { formatBoxesAndPieces, formatWeight } from '@/lib/conversion'
 
 interface PrintManifestProps {
   romaneio: Romaneio
@@ -13,7 +13,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
-      return `${item.peso_total_kg.toFixed(1)} kg`
+      return `${formatWeight(item.peso_total_kg)} kg`
     }
     return formatBoxesAndPieces(item.caixas, item.pecas)
   }
@@ -127,7 +127,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                   style={customHeight ? { height: `${customHeight}px` } : undefined}
                   className="py-1.5 px-1 text-right tabular-nums align-top whitespace-nowrap text-[11px]"
                 >
-                  {item.peso_total_kg.toFixed(1)} kg
+                  {formatWeight(item.peso_total_kg)} kg
                 </td>
                 <td
                   style={customHeight ? { height: `${customHeight}px` } : undefined}
@@ -146,7 +146,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             </td>
             <td className="py-1.5 px-1"></td>
             <td className="py-1.5 px-1 text-right tabular-nums whitespace-nowrap">
-              {totalPeso.toFixed(1)} kg
+              {formatWeight(totalPeso)} kg
             </td>
             <td className="py-1.5 px-1 text-right text-black font-bold text-[11px]">
               {totalCaixas > 0 && `${totalCaixas} cx `}

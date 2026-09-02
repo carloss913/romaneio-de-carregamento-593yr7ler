@@ -42,7 +42,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Produto, RomaneioItem, normalizeSecao } from '@/types/database'
 import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
-import { convertWeightToBoxesAndPieces, parseBrazilianWeight } from '@/lib/conversion'
+import { convertWeightToBoxesAndPieces, parseBrazilianWeight, formatWeight } from '@/lib/conversion'
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
 import { updateProduto, createProduto, getProdutos } from '@/services/produtos'
@@ -185,7 +185,7 @@ export function ImportWizardModal({
         weightWarning: false,
         caixas: 0,
         pecas: 0,
-        textoFormatado: `${pesoKg.toFixed(1)} kg`,
+        textoFormatado: `${formatWeight(pesoKg)} kg`,
       }
     }
     const conv = convertWeightToBoxesAndPieces(
@@ -275,7 +275,7 @@ export function ImportWizardModal({
             weightWarning: false,
             caixas: 0,
             pecas: 0,
-            textoFormatado: pesoKg > 0 ? `${pesoKg.toFixed(1)} kg` : 'Peso inválido',
+            textoFormatado: pesoKg > 0 ? `${formatWeight(pesoKg)} kg` : 'Peso inválido',
           }
         }
 
@@ -357,7 +357,7 @@ export function ImportWizardModal({
             ...row,
             pesoKg: newWeight,
             matchStatus: newWeight <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
-            textoFormatado: newWeight > 0 ? `${newWeight.toFixed(1)} kg` : 'Peso inválido',
+            textoFormatado: newWeight > 0 ? `${formatWeight(newWeight)} kg` : 'Peso inválido',
           }
         }
         return applyConversion(row, row.matchedProduto, newWeight)
@@ -949,7 +949,7 @@ export function ImportWizardModal({
                             <TableCell>
                               <Input
                                 type="number"
-                                step="0.1"
+                                step="any"
                                 value={row.pesoKg || ''}
                                 onChange={(e) =>
                                   updateRowWeight(
@@ -1177,7 +1177,7 @@ export function ImportWizardModal({
                                 {productName}
                               </span>
                               <span className="text-amber-900 font-medium shrink-0">
-                                ({row.pesoKg.toFixed(1)} kg)
+                                ({formatWeight(row.pesoKg)} kg)
                               </span>
                             </div>
                             <span className="text-amber-700 text-[11px] shrink-0 font-normal">

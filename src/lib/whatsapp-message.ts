@@ -1,4 +1,5 @@
 import { Romaneio, RomaneioItem } from '@/types/database'
+import { formatWeight } from '@/lib/conversion'
 
 export function buildWhatsAppMessage(
   romaneio: Romaneio,
@@ -18,7 +19,7 @@ export function buildWhatsAppMessage(
   msg += `Rota: ${romaneio.rota}\n`
   msg += `Data: ${new Date(romaneio.data).toLocaleDateString('pt-BR')}\n`
   msg += `Status: ${statusText}\n`
-  msg += `Total: ${totalPeso.toFixed(1)} kg\n`
+  msg += `Total: ${formatWeight(totalPeso)} kg\n`
   msg += `Produtos: ${itens.length}\n`
 
   if (options.carregadoCount !== undefined) {

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { RomaneioItem } from '@/types/database'
+import { formatWeight } from '@/lib/conversion'
 import { TableRow, TableCell } from '@/components/ui/table'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
@@ -203,7 +204,7 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
         style={localHeight ? { height: `${localHeight}px` } : undefined}
         className="text-right font-medium tabular-nums align-top pt-3 pb-3"
       >
-        {item.peso_total_kg.toFixed(1)} kg
+        {formatWeight(item.peso_total_kg)} kg
       </TableCell>
       <TableCell
         style={localHeight ? { height: `${localHeight}px` } : undefined}

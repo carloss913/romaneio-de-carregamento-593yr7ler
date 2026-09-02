@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Truck, ChevronRight, FileText, Scale, CheckCircle2, Package, Plus } from 'lucide-react'
 import { Romaneio, RomaneioItem } from '@/types/database'
+import { formatWeight } from '@/lib/conversion'
 import { getRomaneios } from '@/services/romaneios'
 import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
@@ -163,7 +164,7 @@ export default function Index() {
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-slate-400">Carga total:</span>
                     <span className="text-sm font-bold text-slate-800 tabular-nums">
-                      {kgDaRota.toFixed(1)} kg
+                      {formatWeight(kgDaRota)} kg
                     </span>
                   </div>
                 </Link>
@@ -266,7 +267,7 @@ export default function Index() {
                   <div className="flex items-center gap-4 text-right">
                     <div>
                       <p className="text-sm font-bold text-slate-800 tabular-nums">
-                        {pesoRom.toFixed(1)} kg
+                        {formatWeight(pesoRom)} kg
                       </p>
                       <p className="text-xs text-slate-500 font-medium">{cxRom} caixas</p>
                     </div>

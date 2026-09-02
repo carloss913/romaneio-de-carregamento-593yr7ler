@@ -47,7 +47,7 @@ export function convertWeightToBoxesAndPieces(
         pecas: 0,
         textoFormatado: formatBoxesAndPieces(caixas, 0),
         weightWarning: true,
-        weightWarningMessage: `Peso não é múltiplo de ${pc}kg (resto: ${restoKg.toFixed(2)}kg).`,
+        weightWarningMessage: `Peso não é múltiplo de ${pc}kg (resto: ${formatWeight(restoKg)}kg).`,
       }
     }
     return {
@@ -99,6 +99,21 @@ export function formatBoxesAndPieces(caixas: number, pecas: number): string {
   return `${pecas} pct`
 }
 
+/**
+ * Formata um peso em kg sem arredondar para baixo nem truncar casas decimais significativas.
+ * Exibe até 3 casas decimais preservando o valor digitado/importado fielmente:
+ * Ex.: 10 -> "10", 10.5 -> "10.5", 10.55 -> "10.55", 10.555 -> "10.555".
+ */
+export function formatWeight(peso: number | null | undefined): string {
+  if (peso == null || isNaN(peso)) return '0'
+  // Limita a 3 casas decimais caso haja dízimas de ponto flutuante do JS
+  const fixed = Number(peso.toFixed(3))
+  return fixed.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  })
+}
+
 export function normalizeProductName(name: string): string {
   return name
     .toLowerCase()
@@ -141,5 +156,5 @@ export function recalculatePesoTotal(
 ): number {
   const pesoFromCaixas = (pesoCaixaKg ?? 0) * caixas
   const pesoFromPecas = (pesoPecaKg ?? 0) * pecas
-  return Math.round((pesoFromCaixas + pesoFromPecas) * 100) / 100
+  return Math.round((pesoFromCaixas + pesoFromPecas) * 1000) / 1000
 }

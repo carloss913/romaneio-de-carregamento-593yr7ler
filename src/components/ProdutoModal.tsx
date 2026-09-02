@@ -88,7 +88,7 @@ export function ProdutoModal({
     const c = typeof caixaVal === 'number' ? caixaVal : 0
     const p = typeof pecasVal === 'number' ? pecasVal : 0
     if (c > 0 && p > 0) {
-      setPesoPeca(parseFloat((c / p).toFixed(2)))
+      setPesoPeca(parseFloat((c / p).toFixed(3)))
     }
   }
 
@@ -209,7 +209,7 @@ export function ProdutoModal({
               <Input
                 id="pesoCaixa"
                 type="number"
-                step="0.1"
+                step="any"
                 value={pesoCaixa}
                 placeholder="Ex: 20"
                 onChange={(e) => {
@@ -225,7 +225,7 @@ export function ProdutoModal({
               <Input
                 id="pecasPorCaixa"
                 type="number"
-                step="0.01"
+                step="any"
                 value={pecasPorCaixa}
                 placeholder="Ex: 10"
                 onChange={(e) => {
@@ -244,7 +244,7 @@ export function ProdutoModal({
             <Input
               id="pesoPeca"
               type="number"
-              step="0.01"
+              step="any"
               value={pesoPeca}
               placeholder="Ex: 2.0"
               onChange={(e) => setPesoPeca(e.target.value === '' ? '' : Number(e.target.value))}

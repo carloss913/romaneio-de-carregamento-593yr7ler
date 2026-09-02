@@ -29,7 +29,7 @@ import {
 import { getProdutos, updateProduto } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
 import { refreshRomaneioItens } from '@/services/romaneio_itens'
-import { convertWeightToBoxesAndPieces, formatBoxesAndPieces } from '@/lib/conversion'
+import { convertWeightToBoxesAndPieces, formatBoxesAndPieces, formatWeight } from '@/lib/conversion'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -449,7 +449,7 @@ export default function RomaneioDetail() {
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
-      return `${item.peso_total_kg.toFixed(1)} kg`
+      return `${formatWeight(item.peso_total_kg)} kg`
     }
     return formatBoxesAndPieces(item.caixas, item.pecas)
   }
@@ -596,7 +596,7 @@ export default function RomaneioDetail() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
             <p className="text-xs font-semibold text-slate-400">PESO TOTAL DA CARGA</p>
             <p className="text-2xl font-black text-slate-800 tabular-nums mt-1">
-              {totalPeso.toFixed(1)} kg
+              {formatWeight(totalPeso)} kg
             </p>
           </div>
 
@@ -823,11 +823,11 @@ export default function RomaneioDetail() {
               <Label>Peso Total da Carga (kg)</Label>
               <Input
                 type="number"
-                step="0.1"
-                min="0.1"
+                step="any"
+                min="0.001"
                 value={pesoManual}
                 onChange={(e) => setPesoManual(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Ex: 100.5"
+                placeholder="Ex: 100.555"
                 required
               />
             </div>
