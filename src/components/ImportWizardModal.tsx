@@ -64,6 +64,7 @@ interface ProcessedRow {
   id: string
   rawCode: string
   pesoKg: number
+  weightInputStr?: string
   nomeFromSheet?: string
   matchedProduto?: Produto
   matchStatus: 'ok' | 'auto_cadastrar' | 'peso_invalido'
@@ -349,22 +350,47 @@ export function ImportWizardModal({
     }
   }
 
-  const updateRowWeight = (rowId: string, newWeight: number) => {
+  const handleWeightInputChange = (rowId: string, rawInput: string) => {
     setProcessedRows((prev) =>
       prev.map((row) => {
         if (row.id !== rowId) return row
+
+        const cleanVal = rawInput.replace(',', '.')
+        const parsed = parseFloat(cleanVal)
+        const hasValidNumber = !isNaN(parsed) && cleanVal.trim() !== ''
+
+        if (!hasValidNumber) {
+          // Campo vazio ou string inválida enquanto digita
+          return {
+            ...row,
+            pesoKg: 0,
+            weightInputStr: rawInput,
+            matchStatus: 'peso_invalido' as const,
+            weightWarning: true,
+            weightWarningMessage: 'Peso em branco ou inválido.',
+            caixas: 0,
+            pecas: 0,
+            textoFormatado: '0 cx',
+            isManuallyFixed: true,
+          }
+        }
+
+        const newWeight = parsed
         if (!row.matchedProduto) {
           return {
             ...row,
             pesoKg: newWeight,
+            weightInputStr: rawInput,
             matchStatus: newWeight <= 0 ? ('peso_invalido' as const) : ('auto_cadastrar' as const),
             textoFormatado: newWeight > 0 ? `${formatWeight(newWeight)} kg` : 'Peso inválido',
             isManuallyFixed: true,
           }
         }
+
         const updated = applyConversion(row, row.matchedProduto, newWeight)
         return {
           ...updated,
+          weightInputStr: rawInput,
           isManuallyFixed: true,
         }
       }),
@@ -957,14 +983,16 @@ export function ImportWizardModal({
                               row.matchStatus === 'peso_invalido' ||
                               row.isManuallyFixed ? (
                                 <Input
-                                  type="number"
-                                  step="any"
-                                  value={row.pesoKg === 0 ? '' : row.pesoKg}
-                                  onChange={(e) => {
-                                    const val = e.target.value
-                                    const num = val === '' ? 0 : parseFloat(val)
-                                    updateRowWeight(row.id, isNaN(num) ? 0 : num)
-                                  }}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={
+                                    row.weightInputStr !== undefined
+                                      ? row.weightInputStr
+                                      : row.pesoKg === 0
+                                        ? ''
+                                        : String(row.pesoKg)
+                                  }
+                                  onChange={(e) => handleWeightInputChange(row.id, e.target.value)}
                                   className="h-7 text-xs w-24 font-medium border-amber-400 bg-amber-50/60 focus-visible:ring-amber-500"
                                   title="Editar peso deste item (kg)"
                                   placeholder="0.000"
@@ -1209,14 +1237,16 @@ export function ImportWizardModal({
                                 Peso (kg):
                               </Label>
                               <Input
-                                type="number"
-                                step="any"
-                                value={row.pesoKg === 0 ? '' : row.pesoKg}
-                                onChange={(e) => {
-                                  const val = e.target.value
-                                  const num = val === '' ? 0 : parseFloat(val)
-                                  updateRowWeight(row.id, isNaN(num) ? 0 : num)
-                                }}
+                                type="text"
+                                inputMode="decimal"
+                                value={
+                                  row.weightInputStr !== undefined
+                                    ? row.weightInputStr
+                                    : row.pesoKg === 0
+                                      ? ''
+                                      : String(row.pesoKg)
+                                }
+                                onChange={(e) => handleWeightInputChange(row.id, e.target.value)}
                                 className="h-7 w-24 text-xs font-semibold bg-white border-amber-400 focus-visible:ring-amber-500 shadow-sm"
                                 placeholder="0.000"
                               />
