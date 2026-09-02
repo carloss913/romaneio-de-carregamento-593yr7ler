@@ -382,8 +382,15 @@ export default function PublicLoading() {
                         >
                           {item.expand?.produto?.nome || 'Produto'}
                         </p>
+                        {item.observacao && item.observacao.trim() ? (
+                          <div className="text-xs text-amber-700 font-normal mt-0.5 leading-tight">
+                            <strong className="font-semibold">Obs:</strong> {item.observacao.trim()}
+                          </div>
+                        ) : null}
                         {getItemCodigoMarca(item) && (
-                          <p className="text-xs text-slate-400">{getItemCodigoMarca(item)}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {getItemCodigoMarca(item)}
+                          </p>
                         )}
                       </div>
                       <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
@@ -524,8 +531,13 @@ export default function PublicLoading() {
                       >
                         {item.expand?.produto?.nome || 'Produto'}
                       </p>
+                      {item.observacao && item.observacao.trim() ? (
+                        <div className="text-xs text-amber-700 font-normal mt-0.5 leading-tight">
+                          <strong className="font-semibold">Obs:</strong> {item.observacao.trim()}
+                        </div>
+                      ) : null}
                       {getItemCodigoMarca(item) && (
-                        <p className="text-xs text-slate-400">{getItemCodigoMarca(item)}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{getItemCodigoMarca(item)}</p>
                       )}
                     </div>
                     <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
