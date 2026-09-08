@@ -79,9 +79,12 @@ export function convertUnitsToBoxesAndPieces(
 /**
  * Conversão específica para produtos vendidos por pacote (ex.: espetinhos em pacotes de 5).
  * A quantidade da planilha é o número de espetos/unidades.
- * - pacotes fechados = floor(quantidade / unidadesPorPacote)
- * - pecas = quantidade % unidadesPorPacote (resto solto)
- * - sufixo de exibição: "pct" para a parte de pacotes e "un" para o resto (ex.: "2 pct", "2 pct + 2 un" ou "2 pct + 2 soltos").
+ * Pacotes são LACRADOS: não existe venda de unidades soltas.
+ * - Se a quantidade divide perfeitamente por unidadesPorPacote (resto == 0):
+ *   pacotes = quantidade / unidadesPorPacote, pecas = 0, weightWarning = false
+ * - Se a quantidade NÃO divide perfeitamente (resto != 0):
+ *   dispara alerta de quantidade/peso suspeito (weightWarning = true),
+ *   cai no mesmo fluxo de conferência de peso do wizard de importação.
  * - Se unidadesPorPacote não estiver definido (<= 0), mostra a quantidade total como "X un".
  */
 export function convertPackagesToBoxesAndPieces(
@@ -110,21 +113,23 @@ export function convertPackagesToBoxesAndPieces(
   }
 
   const pacotes = Math.floor(quantidadeTotal / upp)
-  const soltos = Math.round(quantidadeTotal % upp)
+  const resto = Math.round(quantidadeTotal % upp)
 
-  let texto = ''
-  if (pacotes > 0 && soltos > 0) {
-    texto = `${pacotes} pct + ${soltos} soltos`
-  } else if (pacotes > 0) {
-    texto = `${pacotes} pct`
-  } else {
-    texto = `${soltos} un`
+  if (resto !== 0) {
+    // Pacotes são lacrados — não fecha em pacotes inteiros! Alerta de quantidade/peso incorreto
+    return {
+      caixas: pacotes,
+      pecas: resto,
+      textoFormatado: pacotes > 0 ? `${pacotes} pct` : `${quantidadeTotal} un`,
+      weightWarning: true,
+      weightWarningMessage: `Quantidade não fecha em pacotes fechados de ${upp} un (sobra ${resto} un — pacotes são lacrados).`,
+    }
   }
 
   return {
     caixas: pacotes,
-    pecas: soltos,
-    textoFormatado: texto,
+    pecas: 0,
+    textoFormatado: `${pacotes} pct`,
     weightWarning: false,
   }
 }
@@ -221,7 +226,6 @@ export function formatBoxesAndPieces(
 
   if (isPct) {
     if (caixas === 0 && pecas === 0) return '0 pct'
-    if (caixas > 0 && pecas > 0) return `${caixas} pct + ${pecas} soltos`
     if (caixas > 0) return `${caixas} pct`
     return `${pecas} un`
   }

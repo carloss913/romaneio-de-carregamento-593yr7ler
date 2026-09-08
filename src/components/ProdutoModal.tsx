@@ -254,7 +254,9 @@ export function ProdutoModal({
                   className="bg-white border-purple-300"
                 />
                 <p className="text-[11px] text-purple-700">
-                  Ex.: se cada pacote tem 5 espetos e a quantidade for 12, calcula 2 pct + 2 soltos.
+                  Pacotes são lacrados (não vende soltas). Ex.: 10 espetos com 5/pct = 2 pct. Se a
+                  quantidade não fechar em pacotes inteiros, o sistema emitirá alerta de conferência
+                  de peso.
                 </p>
               </div>
             </div>
