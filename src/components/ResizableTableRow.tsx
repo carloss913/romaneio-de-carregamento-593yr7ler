@@ -103,6 +103,8 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
   const currentSecao = prod?.secao
   const displaySecao = currentSecao ? currentSecao : '—'
   const isUn = isUnidadeProduto(prod?.unidade_medida)
+  const isPacote = prod?.unidade_medida === 'pacote'
+  const isNonKg = isUn || isPacote
   const hasCustomHeight = localHeight !== null && localHeight > 48
 
   return (
@@ -205,7 +207,11 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
         style={localHeight ? { height: `${localHeight}px` } : undefined}
         className="text-right font-medium tabular-nums align-top pt-3 pb-3"
       >
-        <span className={isUn ? 'text-amber-800 font-semibold' : ''}>
+        <span
+          className={
+            isPacote ? 'text-purple-800 font-semibold' : isUn ? 'text-amber-800 font-semibold' : ''
+          }
+        >
           {formatProductAmount(item.peso_total_kg, prod?.unidade_medida)}
         </span>
       </TableCell>

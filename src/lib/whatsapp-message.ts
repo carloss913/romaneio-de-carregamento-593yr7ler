@@ -1,5 +1,5 @@
 import { Romaneio, RomaneioItem } from '@/types/database'
-import { formatProductAmount, formatWeight, isUnidadeProduto } from '@/lib/conversion'
+import { formatProductAmount, formatWeight, isNonKgProduto } from '@/lib/conversion'
 
 export function buildWhatsAppMessage(
   romaneio: Romaneio,
@@ -10,10 +10,10 @@ export function buildWhatsAppMessage(
     options.statusText || (romaneio.status === 'finalizado' ? 'Finalizado' : 'Em Andamento')
 
   const totalPeso = itens
-    .filter((i) => !isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .filter((i) => !isNonKgProduto(i.expand?.produto?.unidade_medida))
     .reduce((acc, i) => acc + i.peso_total_kg, 0)
   const totalUnidades = itens
-    .filter((i) => isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .filter((i) => isNonKgProduto(i.expand?.produto?.unidade_medida))
     .reduce((acc, i) => acc + i.peso_total_kg, 0)
 
   let msg = `*Conclusão de Carregamento*\n\n`

@@ -45,7 +45,7 @@ export default function Produtos() {
   const [configPhone, setConfigPhone] = useState('')
 
   const isProdutoIncomplete = (p: Produto) => {
-    if (p.unidade_medida === 'unidade') {
+    if (p.unidade_medida === 'unidade' || p.unidade_medida === 'pacote') {
       return !p.pecas_por_caixa || p.pecas_por_caixa <= 0
     }
     return (
@@ -226,6 +226,8 @@ export default function Produtos() {
             ) : (
               filtered.map((p) => {
                 const isUn = p.unidade_medida === 'unidade'
+                const isPacote = p.unidade_medida === 'pacote'
+                const isNonKg = isUn || isPacote
                 return (
                   <TableRow
                     key={p.id}
@@ -240,7 +242,14 @@ export default function Produtos() {
                     <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
                     <TableCell className="text-slate-600 text-sm">{p.marca || '-'}</TableCell>
                     <TableCell className="text-center">
-                      {isUn ? (
+                      {isPacote ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-purple-50 text-purple-800 border-purple-300 font-bold text-xs"
+                        >
+                          Pacote
+                        </Badge>
+                      ) : isUn ? (
                         <Badge
                           variant="outline"
                           className="bg-amber-50 text-amber-800 border-amber-300 font-bold text-xs"
@@ -257,7 +266,9 @@ export default function Produtos() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
-                      {isUn ? (
+                      {isPacote ? (
+                        <span className="text-xs text-purple-600 italic">N/A (pct)</span>
+                      ) : isUn ? (
                         <span className="text-xs text-slate-400 italic">N/A (un)</span>
                       ) : p.peso_caixa_kg ? (
                         formatWeight(p.peso_caixa_kg) + ' kg'
@@ -268,14 +279,16 @@ export default function Produtos() {
                     <TableCell className="text-center font-semibold tabular-nums">
                       {p.pecas_por_caixa ? (
                         <span>
-                          {p.pecas_por_caixa} {isUn ? 'un' : 'pct'}
+                          {p.pecas_por_caixa} {isPacote ? 'un/pct' : isUn ? 'un/cx' : 'pct/cx'}
                         </span>
                       ) : (
                         '-'
                       )}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums text-slate-600">
-                      {isUn ? (
+                      {isPacote ? (
+                        <span className="text-xs text-purple-600 italic">N/A (pct)</span>
+                      ) : isUn ? (
                         <span className="text-xs text-slate-400 italic">N/A (un)</span>
                       ) : p.peso_peca_kg ? (
                         formatWeight(p.peso_peca_kg) + ' kg'

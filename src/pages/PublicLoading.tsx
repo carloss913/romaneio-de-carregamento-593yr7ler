@@ -186,7 +186,15 @@ export default function PublicLoading() {
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     const prod = item.expand?.produto
+    const isPct = prod?.unidade_medida === 'pacote'
     const isUn = isUnidadeProduto(prod?.unidade_medida)
+
+    if (isPct) {
+      if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
+        return `${formatWeight(item.peso_total_kg)} un`
+      }
+      return formatBoxesAndPieces(item.caixas, item.pecas, 'pacote')
+    }
 
     if (isUn) {
       if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {

@@ -10,6 +10,14 @@ export function isUnidadeProduto(unidadeMedida?: string | null): boolean {
   return unidadeMedida === 'unidade'
 }
 
+export function isPacoteProduto(unidadeMedida?: string | null): boolean {
+  return unidadeMedida === 'pacote'
+}
+
+export function isNonKgProduto(unidadeMedida?: string | null): boolean {
+  return unidadeMedida === 'unidade' || unidadeMedida === 'pacote'
+}
+
 export function hasPecaData(pesoPecaKg?: number, pecasPorCaixa?: number): boolean {
   return (pesoPecaKg ?? 0) > 0 && (pecasPorCaixa ?? 0) > 0
 }
@@ -63,6 +71,59 @@ export function convertUnitsToBoxesAndPieces(
   return {
     caixas,
     pecas,
+    textoFormatado: texto,
+    weightWarning: false,
+  }
+}
+
+/**
+ * Conversão específica para produtos vendidos por pacote (ex.: espetinhos em pacotes de 5).
+ * A quantidade da planilha é o número de espetos/unidades.
+ * - pacotes fechados = floor(quantidade / unidadesPorPacote)
+ * - pecas = quantidade % unidadesPorPacote (resto solto)
+ * - sufixo de exibição: "pct" para a parte de pacotes e "un" para o resto (ex.: "2 pct", "2 pct + 2 un" ou "2 pct + 2 soltos").
+ * - Se unidadesPorPacote não estiver definido (<= 0), mostra a quantidade total como "X un".
+ */
+export function convertPackagesToBoxesAndPieces(
+  quantidadeTotal: number,
+  unidadesPorPacote?: number,
+): ConversionResult {
+  if (quantidadeTotal <= 0) {
+    return {
+      caixas: 0,
+      pecas: 0,
+      textoFormatado: '0 un',
+      weightWarning: true,
+      weightWarningMessage: 'Quantidade inválida (zero, negativa ou em branco).',
+    }
+  }
+
+  const upp = Math.round(unidadesPorPacote ?? 0)
+  if (upp <= 0) {
+    const qtdRound = Math.round(quantidadeTotal)
+    return {
+      caixas: 0,
+      pecas: qtdRound,
+      textoFormatado: `${qtdRound} un`,
+      weightWarning: false,
+    }
+  }
+
+  const pacotes = Math.floor(quantidadeTotal / upp)
+  const soltos = Math.round(quantidadeTotal % upp)
+
+  let texto = ''
+  if (pacotes > 0 && soltos > 0) {
+    texto = `${pacotes} pct + ${soltos} soltos`
+  } else if (pacotes > 0) {
+    texto = `${pacotes} pct`
+  } else {
+    texto = `${soltos} un`
+  }
+
+  return {
+    caixas: pacotes,
+    pecas: soltos,
     textoFormatado: texto,
     weightWarning: false,
   }
@@ -156,6 +217,15 @@ export function formatBoxesAndPieces(
   unidadeMedida?: string | null,
 ): string {
   const isUn = isUnidadeProduto(unidadeMedida)
+  const isPct = isPacoteProduto(unidadeMedida)
+
+  if (isPct) {
+    if (caixas === 0 && pecas === 0) return '0 pct'
+    if (caixas > 0 && pecas > 0) return `${caixas} pct + ${pecas} soltos`
+    if (caixas > 0) return `${caixas} pct`
+    return `${pecas} un`
+  }
+
   const sufixoPeca = isUn ? 'un' : 'pct'
 
   if (caixas === 0 && pecas === 0) return isUn ? '0 un' : '0 cx'
@@ -167,6 +237,7 @@ export function formatBoxesAndPieces(
 /**
  * Formata a quantidade/peso de um produto respeitando sua unidade de medida.
  * Para itens em unidade: exibe "24 un" (nunca "24kg").
+ * Para itens em pacote: exibe "24 un" (a quantidade da planilha é em espetos/unidades).
  * Para itens em kg: exibe "24 kg".
  */
 export function formatProductAmount(
@@ -174,7 +245,7 @@ export function formatProductAmount(
   unidadeMedida?: string | null,
 ): string {
   const formatted = formatWeight(valor)
-  if (isUnidadeProduto(unidadeMedida)) {
+  if (isUnidadeProduto(unidadeMedida) || isPacoteProduto(unidadeMedida)) {
     return `${formatted} un`
   }
   return `${formatted} kg`

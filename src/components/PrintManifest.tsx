@@ -3,6 +3,8 @@ import {
   formatBoxesAndPieces,
   formatProductAmount,
   formatWeight,
+  isNonKgProduto,
+  isPacoteProduto,
   isUnidadeProduto,
 } from '@/lib/conversion'
 
@@ -13,17 +15,25 @@ interface PrintManifestProps {
 
 export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
   const totalPeso = itens
-    .filter((i) => !isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .filter((i) => !isNonKgProduto(i.expand?.produto?.unidade_medida))
     .reduce((acc, i) => acc + i.peso_total_kg, 0)
   const totalUnidades = itens
-    .filter((i) => isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .filter((i) => isNonKgProduto(i.expand?.produto?.unidade_medida))
     .reduce((acc, i) => acc + i.peso_total_kg, 0)
   const totalCaixas = itens.reduce((acc, i) => acc + i.caixas, 0)
   const totalPecas = itens.reduce((acc, i) => acc + i.pecas, 0)
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     const prod = item.expand?.produto
+    const isPct = isPacoteProduto(prod?.unidade_medida)
     const isUn = isUnidadeProduto(prod?.unidade_medida)
+
+    if (isPct) {
+      if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
+        return `${formatWeight(item.peso_total_kg)} un`
+      }
+      return formatBoxesAndPieces(item.caixas, item.pecas, 'pacote')
+    }
 
     if (isUn) {
       if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {

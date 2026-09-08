@@ -9,7 +9,7 @@ export interface Rota extends RecordModel {
   ordem?: number
 }
 
-export type UnidadeMedida = 'kg' | 'unidade'
+export type UnidadeMedida = 'kg' | 'unidade' | 'pacote'
 
 export interface Produto extends RecordModel {
   codigo: string

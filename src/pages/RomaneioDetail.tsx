@@ -32,10 +32,13 @@ import { refreshRomaneioItens } from '@/services/romaneio_itens'
 import {
   convertWeightToBoxesAndPieces,
   convertUnitsToBoxesAndPieces,
+  convertPackagesToBoxesAndPieces,
   formatBoxesAndPieces,
   formatProductAmount,
   formatWeight,
   isUnidadeProduto,
+  isPacoteProduto,
+  isNonKgProduto,
 } from '@/lib/conversion'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -242,10 +245,10 @@ export default function RomaneioDetail() {
   })
 
   const totalPeso = itens
-    .filter((i) => !isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .filter((i) => !isNonKgProduto(i.expand?.produto?.unidade_medida))
     .reduce((a, b) => a + b.peso_total_kg, 0)
   const totalUnidades = itens
-    .filter((i) => isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .filter((i) => isNonKgProduto(i.expand?.produto?.unidade_medida))
     .reduce((a, b) => a + b.peso_total_kg, 0)
   const totalCaixas = itens.reduce((a, b) => a + b.caixas, 0)
   const totalPecas = itens.reduce((a, b) => a + b.pecas, 0)
@@ -272,14 +275,16 @@ export default function RomaneioDetail() {
     const prod = produtos.find((p) => p.id === selectedProdutoId)
     if (!prod) return
 
-    const conv = isUnidadeProduto(prod.unidade_medida)
-      ? convertUnitsToBoxesAndPieces(Number(pesoManual), prod.pecas_por_caixa)
-      : convertWeightToBoxesAndPieces(
-          Number(pesoManual),
-          prod.peso_caixa_kg,
-          prod.peso_peca_kg,
-          prod.pecas_por_caixa,
-        )
+    const conv = isPacoteProduto(prod.unidade_medida)
+      ? convertPackagesToBoxesAndPieces(Number(pesoManual), prod.pecas_por_caixa)
+      : isUnidadeProduto(prod.unidade_medida)
+        ? convertUnitsToBoxesAndPieces(Number(pesoManual), prod.pecas_por_caixa)
+        : convertWeightToBoxesAndPieces(
+            Number(pesoManual),
+            prod.peso_caixa_kg,
+            prod.peso_peca_kg,
+            prod.pecas_por_caixa,
+          )
 
     try {
       await createRomaneioItem({
@@ -463,7 +468,15 @@ export default function RomaneioDetail() {
 
   const getItemQuantidade = (item: RomaneioItem): string => {
     const prod = item.expand?.produto
+    const isPct = isPacoteProduto(prod?.unidade_medida)
     const isUn = isUnidadeProduto(prod?.unidade_medida)
+
+    if (isPct) {
+      if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
+        return `${formatWeight(item.peso_total_kg)} un`
+      }
+      return formatBoxesAndPieces(item.caixas, item.pecas, 'pacote')
+    }
 
     if (isUn) {
       if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
@@ -624,7 +637,7 @@ export default function RomaneioDetail() {
             </p>
             {totalUnidades > 0 && (
               <p className="text-xs font-bold text-amber-700 mt-1">
-                + {formatWeight(totalUnidades)} un (em unidades)
+                + {formatWeight(totalUnidades)} un (em unidades/pct)
               </p>
             )}
           </div>
@@ -850,9 +863,11 @@ export default function RomaneioDetail() {
 
             <div className="space-y-1.5">
               <Label>
-                {selectedProd && isUnidadeProduto(selectedProd.unidade_medida)
-                  ? 'Quantidade Total (unidades)'
-                  : 'Peso Total da Carga (kg)'}
+                {selectedProd && isPacoteProduto(selectedProd.unidade_medida)
+                  ? 'Quantidade Total (espetos/unidades)'
+                  : selectedProd && isUnidadeProduto(selectedProd.unidade_medida)
+                    ? 'Quantidade Total (unidades)'
+                    : 'Peso Total da Carga (kg)'}
               </Label>
               <Input
                 type="number"
@@ -861,9 +876,11 @@ export default function RomaneioDetail() {
                 value={pesoManual}
                 onChange={(e) => setPesoManual(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder={
-                  selectedProd && isUnidadeProduto(selectedProd.unidade_medida)
-                    ? 'Ex: 24 (copos/peças)'
-                    : 'Ex: 100.555'
+                  selectedProd && isPacoteProduto(selectedProd.unidade_medida)
+                    ? 'Ex: 10 (espetos)'
+                    : selectedProd && isUnidadeProduto(selectedProd.unidade_medida)
+                      ? 'Ex: 24 (copos/peças)'
+                      : 'Ex: 100.555'
                 }
                 required
               />

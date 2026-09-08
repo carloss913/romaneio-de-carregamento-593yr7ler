@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-08T19:39:41.052Z",
+  "generatedAt": "2026-09-08T19:57:48.521Z",
   "collections": [
     {
       "name": "users",
@@ -123,7 +123,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["kg", "unidade"]
+          "selectValues": ["kg", "unidade", "pacote"]
         }
       ],
       "indexes": [

@@ -60,7 +60,7 @@ export const refreshRomaneioItens = async (
     let newCaixas = item.caixas
     let newPecas = item.pecas
 
-    if (produto.unidade_medida === 'unidade') {
+    if (produto.unidade_medida === 'unidade' || produto.unidade_medida === 'pacote') {
       if (item.peso_total_kg > 0) {
         const upc = Math.round(produto.pecas_por_caixa ?? 0)
         let calcCx = 0

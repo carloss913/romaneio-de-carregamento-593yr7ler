@@ -45,8 +45,11 @@ import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
 import {
   convertWeightToBoxesAndPieces,
   convertUnitsToBoxesAndPieces,
+  convertPackagesToBoxesAndPieces,
   formatProductAmount,
   isUnidadeProduto,
+  isPacoteProduto,
+  isNonKgProduto,
   parseBrazilianWeight,
   formatWeight,
 } from '@/lib/conversion'
@@ -186,7 +189,22 @@ export function ImportWizardModal({
   }
 
   const applyConversion = (row: ProcessedRow, produto: Produto, pesoKg: number): ProcessedRow => {
+    const isPct = isPacoteProduto(produto.unidade_medida)
     const isUn = isUnidadeProduto(produto.unidade_medida)
+
+    if (isPct) {
+      const conv = convertPackagesToBoxesAndPieces(pesoKg, produto.pecas_por_caixa)
+      return {
+        ...row,
+        matchedProduto: produto,
+        matchStatus: pesoKg <= 0 ? 'peso_invalido' : 'ok',
+        weightWarning: conv.weightWarning,
+        weightWarningMessage: conv.weightWarningMessage,
+        caixas: conv.caixas,
+        pecas: conv.pecas,
+        textoFormatado: conv.textoFormatado,
+      }
+    }
 
     if (isUn) {
       const conv = convertUnitsToBoxesAndPieces(pesoKg, produto.pecas_por_caixa)
@@ -1036,14 +1054,16 @@ export function ImportWizardModal({
                                     }
                                     className="h-7 text-xs w-24 font-medium border-amber-400 bg-amber-50/60 focus-visible:ring-amber-500"
                                     title={
-                                      isUnidadeProduto(row.matchedProduto?.unidade_medida)
-                                        ? 'Editar quantidade em unidades'
-                                        : 'Editar peso em kg'
+                                      isPacoteProduto(row.matchedProduto?.unidade_medida)
+                                        ? 'Editar quantidade em espetos/unidades'
+                                        : isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                          ? 'Editar quantidade em unidades'
+                                          : 'Editar peso em kg'
                                     }
                                     placeholder="0"
                                   />
                                   <span className="text-[11px] font-semibold text-slate-500">
-                                    {isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                    {isNonKgProduto(row.matchedProduto?.unidade_medida)
                                       ? 'un'
                                       : 'kg'}
                                   </span>
@@ -1078,9 +1098,11 @@ export function ImportWizardModal({
                               {row.matchStatus === 'ok' && !row.weightWarning && (
                                 <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 border-emerald-500/30">
                                   <CheckCircle2 className="w-3 h-3 mr-1" />{' '}
-                                  {isUnidadeProduto(row.matchedProduto?.unidade_medida)
-                                    ? 'Unidade OK'
-                                    : 'OK'}
+                                  {isPacoteProduto(row.matchedProduto?.unidade_medida)
+                                    ? 'Pacote OK'
+                                    : isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                      ? 'Unidade OK'
+                                      : 'OK'}
                                 </Badge>
                               )}
                               {row.matchStatus === 'ok' && row.weightWarning && (
@@ -1090,7 +1112,7 @@ export function ImportWizardModal({
                                   title={row.weightWarningMessage}
                                 >
                                   <AlertTriangle className="w-3 h-3 mr-1" />{' '}
-                                  {isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                  {isNonKgProduto(row.matchedProduto?.unidade_medida)
                                     ? 'Conferir Qtd'
                                     : 'Peso'}
                                 </Badge>
@@ -1294,9 +1316,11 @@ export function ImportWizardModal({
 
                             <div className="flex items-center gap-1.5 shrink-0">
                               <Label className="text-[11px] text-amber-900 font-semibold whitespace-nowrap">
-                                {isUnidadeProduto(row.matchedProduto?.unidade_medida)
-                                  ? 'Qtd (un):'
-                                  : 'Peso (kg):'}
+                                {isPacoteProduto(row.matchedProduto?.unidade_medida)
+                                  ? 'Qtd (espetos):'
+                                  : isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                    ? 'Qtd (un):'
+                                    : 'Peso (kg):'}
                               </Label>
                               <Input
                                 type="text"

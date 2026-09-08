@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Produto, normalizeSecao } from '@/types/database'
+import { Produto, UnidadeMedida, normalizeSecao } from '@/types/database'
 import { createProduto, updateProduto } from '@/services/produtos'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
@@ -27,7 +27,7 @@ export interface InitialProdutoData {
   nome?: string
   marca?: string
   secao?: 'CONGELADO' | 'GERAL' | 'RESFRIADO' | string
-  unidade_medida?: 'kg' | 'unidade'
+  unidade_medida?: UnidadeMedida
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number
@@ -56,13 +56,15 @@ export function ProdutoModal({
   const [nome, setNome] = useState('')
   const [marca, setMarca] = useState('')
   const [secao, setSecao] = useState<'CONGELADO' | 'GERAL' | 'RESFRIADO' | '__NONE'>('__NONE')
-  const [unidadeMedida, setUnidadeMedida] = useState<'kg' | 'unidade'>('kg')
+  const [unidadeMedida, setUnidadeMedida] = useState<UnidadeMedida>('kg')
   const [pesoCaixa, setPesoCaixa] = useState<number | ''>('')
   const [pecasPorCaixa, setPecasPorCaixa] = useState<number | ''>('')
   const [pesoPeca, setPesoPeca] = useState<number | ''>('')
   const [ativo, setAtivo] = useState(true)
 
   const isUnidade = unidadeMedida === 'unidade'
+  const isPacote = unidadeMedida === 'pacote'
+  const isNonKg = isUnidade || isPacote
 
   useEffect(() => {
     if (!open) return
@@ -72,7 +74,7 @@ export function ProdutoModal({
       setNome(produto.nome || '')
       setMarca(produto.marca || '')
       setSecao((normalizeSecao(produto.secao) as any) || '__NONE')
-      setUnidadeMedida(produto.unidade_medida === 'unidade' ? 'unidade' : 'kg')
+      setUnidadeMedida(produto.unidade_medida || 'kg')
       setPesoCaixa(produto.peso_caixa_kg ?? '')
       setPecasPorCaixa(produto.pecas_por_caixa ?? '')
       setPesoPeca(produto.peso_peca_kg ?? '')
@@ -82,7 +84,7 @@ export function ProdutoModal({
       setNome(initialData?.nome || initialName || '')
       setMarca(initialData?.marca || '')
       setSecao((normalizeSecao(initialData?.secao) as any) || '__NONE')
-      setUnidadeMedida(initialData?.unidade_medida === 'unidade' ? 'unidade' : 'kg')
+      setUnidadeMedida(initialData?.unidade_medida || 'kg')
       setPesoCaixa(initialData?.peso_caixa_kg ?? '')
       setPecasPorCaixa(initialData?.pecas_por_caixa ?? '')
       setPesoPeca(initialData?.peso_peca_kg ?? '')
@@ -120,9 +122,9 @@ export function ProdutoModal({
           marca: marca.trim(),
           secao: secaoVal,
           unidade_medida: unidadeMedida,
-          peso_caixa_kg: isUnidade ? 0 : pesoCaixa === '' ? 0 : Number(pesoCaixa),
+          peso_caixa_kg: isNonKg ? 0 : pesoCaixa === '' ? 0 : Number(pesoCaixa),
           pecas_por_caixa: pecasPorCaixa === '' ? 0 : Number(pecasPorCaixa),
-          peso_peca_kg: isUnidade ? 0 : pesoPeca === '' ? 0 : Number(pesoPeca),
+          peso_peca_kg: isNonKg ? 0 : pesoPeca === '' ? 0 : Number(pesoPeca),
           ativo,
         })
         toast({ title: 'Produto atualizado!', description: `${saved.nome} foi salvo com sucesso.` })
@@ -133,9 +135,9 @@ export function ProdutoModal({
           marca: marca.trim(),
           secao: secaoVal,
           unidade_medida: unidadeMedida,
-          peso_caixa_kg: isUnidade ? 0 : pesoCaixa === '' ? 0 : Number(pesoCaixa),
+          peso_caixa_kg: isNonKg ? 0 : pesoCaixa === '' ? 0 : Number(pesoCaixa),
           pecas_por_caixa: pecasPorCaixa === '' ? 0 : Number(pecasPorCaixa),
-          peso_peca_kg: isUnidade ? 0 : pesoPeca === '' ? 0 : Number(pesoPeca),
+          peso_peca_kg: isNonKg ? 0 : pesoPeca === '' ? 0 : Number(pesoPeca),
           ativo,
         })
         toast({ title: 'Produto criado!', description: `${saved.nome} adicionado ao catálogo.` })
@@ -213,7 +215,7 @@ export function ProdutoModal({
               <Label htmlFor="unidadeMedida">Unidade de Medida</Label>
               <Select
                 value={unidadeMedida}
-                onValueChange={(val: 'kg' | 'unidade') => setUnidadeMedida(val)}
+                onValueChange={(val: UnidadeMedida) => setUnidadeMedida(val)}
               >
                 <SelectTrigger id="unidadeMedida" className="font-semibold">
                   <SelectValue placeholder="Selecione a unidade" />
@@ -221,12 +223,42 @@ export function ProdutoModal({
                 <SelectContent>
                   <SelectItem value="kg">KG</SelectItem>
                   <SelectItem value="unidade">Unidade (peças/copos)</SelectItem>
+                  <SelectItem value="pacote">Pacote (pct)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {isUnidade ? (
+          {isPacote ? (
+            <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl space-y-3">
+              <div className="text-xs text-purple-900">
+                <strong>Produto em Pacote (pct):</strong> A quantidade na planilha é tratada em
+                unidades/espetos (ex.: 10 espetos). Sem conversão de peso em kg.
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pecasPorCaixa" className="text-purple-950 font-bold">
+                  Unidades por Pacote{' '}
+                  <span className="text-xs text-slate-400 font-normal">(opcional)</span>
+                </Label>
+                <Input
+                  id="pecasPorCaixa"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={pecasPorCaixa}
+                  placeholder="Ex: 5 (5 espetos por pacote)"
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? '' : Number(e.target.value)
+                    setPecasPorCaixa(val)
+                  }}
+                  className="bg-white border-purple-300"
+                />
+                <p className="text-[11px] text-purple-700">
+                  Ex.: se cada pacote tem 5 espetos e a quantidade for 12, calcula 2 pct + 2 soltos.
+                </p>
+              </div>
+            </div>
+          ) : isUnidade ? (
             <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-3">
               <div className="text-xs text-amber-800">
                 <strong>Produto em Unidade:</strong> A quantidade na planilha é tratada em unidades
