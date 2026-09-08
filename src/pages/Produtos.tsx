@@ -44,13 +44,19 @@ export default function Produtos() {
   const [configOpen, setConfigOpen] = useState(false)
   const [configPhone, setConfigPhone] = useState('')
 
-  const isProdutoIncomplete = (p: Produto) =>
-    !p.peso_caixa_kg ||
-    p.peso_caixa_kg <= 0 ||
-    !p.pecas_por_caixa ||
-    p.pecas_por_caixa <= 0 ||
-    !p.peso_peca_kg ||
-    p.peso_peca_kg <= 0
+  const isProdutoIncomplete = (p: Produto) => {
+    if (p.unidade_medida === 'unidade') {
+      return !p.pecas_por_caixa || p.pecas_por_caixa <= 0
+    }
+    return (
+      !p.peso_caixa_kg ||
+      p.peso_caixa_kg <= 0 ||
+      !p.pecas_por_caixa ||
+      p.pecas_por_caixa <= 0 ||
+      !p.peso_peca_kg ||
+      p.peso_peca_kg <= 0
+    )
+  }
 
   const loadData = async () => {
     try {
@@ -202,8 +208,9 @@ export default function Produtos() {
               <TableHead>Código</TableHead>
               <TableHead>Produto</TableHead>
               <TableHead>Marca</TableHead>
+              <TableHead className="text-center">Unidade</TableHead>
               <TableHead className="text-right">Peso Caixa (kg)</TableHead>
-              <TableHead className="text-center">Peças por Caixa</TableHead>
+              <TableHead className="text-center">Unidades / Cx</TableHead>
               <TableHead className="text-right">Peso Peça (kg)</TableHead>
               <TableHead className="text-center">Situação</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -212,80 +219,118 @@ export default function Produtos() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-slate-400">
+                <TableCell colSpan={9} className="text-center py-8 text-slate-400">
                   Nenhum produto encontrado.
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((p) => (
-                <TableRow
-                  key={p.id}
-                  className={cn(
-                    !p.ativo && 'opacity-50 bg-slate-50',
-                    showIncomplete && isProdutoIncomplete(p) && 'bg-amber-50/60',
-                  )}
-                >
-                  <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
-                    {p.codigo || '-'}
-                  </TableCell>
-                  <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
-                  <TableCell className="text-slate-600 text-sm">{p.marca || '-'}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {p.peso_caixa_kg ? formatWeight(p.peso_caixa_kg) + ' kg' : '-'}
-                  </TableCell>
-                  <TableCell className="text-center font-semibold tabular-nums">
-                    {p.pecas_por_caixa || '-'}
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums text-slate-600">
-                    {p.peso_peca_kg ? formatWeight(p.peso_peca_kg) + ' kg' : '-'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {p.ativo ? (
-                      <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
-                        <CheckCircle2 className="w-3 h-3 mr-1" /> Ativo
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-slate-400 border-slate-300">
-                        <XCircle className="w-3 h-3 mr-1" /> Inativo
-                      </Badge>
+              filtered.map((p) => {
+                const isUn = p.unidade_medida === 'unidade'
+                return (
+                  <TableRow
+                    key={p.id}
+                    className={cn(
+                      !p.ativo && 'opacity-50 bg-slate-50',
+                      showIncomplete && isProdutoIncomplete(p) && 'bg-amber-50/60',
                     )}
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedProduto(p)
-                        setModalOpen(true)
-                      }}
-                      className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleToggleStatus(p)}
-                      className="h-8 w-8 text-slate-500 hover:text-orange-600"
-                      title={p.ativo ? 'Inativar' : 'Ativar'}
-                    >
-                      {p.ativo ? (
-                        <XCircle className="w-4 h-4" />
+                  >
+                    <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
+                      {p.codigo || '-'}
+                    </TableCell>
+                    <TableCell className="font-bold text-slate-800">{p.nome}</TableCell>
+                    <TableCell className="text-slate-600 text-sm">{p.marca || '-'}</TableCell>
+                    <TableCell className="text-center">
+                      {isUn ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-amber-50 text-amber-800 border-amber-300 font-bold text-xs"
+                        >
+                          Unidade
+                        </Badge>
                       ) : (
-                        <CheckCircle2 className="w-4 h-4" />
+                        <Badge
+                          variant="outline"
+                          className="bg-slate-50 text-slate-700 border-slate-300 font-semibold text-xs"
+                        >
+                          KG
+                        </Badge>
                       )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(p)}
-                      className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {isUn ? (
+                        <span className="text-xs text-slate-400 italic">N/A (un)</span>
+                      ) : p.peso_caixa_kg ? (
+                        formatWeight(p.peso_caixa_kg) + ' kg'
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center font-semibold tabular-nums">
+                      {p.pecas_por_caixa ? (
+                        <span>
+                          {p.pecas_por_caixa} {isUn ? 'un' : 'pct'}
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums text-slate-600">
+                      {isUn ? (
+                        <span className="text-xs text-slate-400 italic">N/A (un)</span>
+                      ) : p.peso_peca_kg ? (
+                        formatWeight(p.peso_peca_kg) + ' kg'
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {p.ativo ? (
+                        <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                          <CheckCircle2 className="w-3 h-3 mr-1" /> Ativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-slate-400 border-slate-300">
+                          <XCircle className="w-3 h-3 mr-1" /> Inativo
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedProduto(p)
+                          setModalOpen(true)
+                        }}
+                        className="h-8 w-8 text-slate-500 hover:text-slate-800"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleToggleStatus(p)}
+                        className="h-8 w-8 text-slate-500 hover:text-orange-600"
+                        title={p.ativo ? 'Inativar' : 'Ativar'}
+                      >
+                        {p.ativo ? (
+                          <XCircle className="w-4 h-4" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(p)}
+                        className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>

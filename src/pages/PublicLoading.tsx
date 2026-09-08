@@ -20,7 +20,12 @@ import {
 } from '@/services/romaneio_itens'
 import { getProdutos } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
-import { formatBoxesAndPieces, formatWeight } from '@/lib/conversion'
+import {
+  formatBoxesAndPieces,
+  formatProductAmount,
+  formatWeight,
+  isUnidadeProduto,
+} from '@/lib/conversion'
 import { buildWhatsAppMessage } from '@/lib/whatsapp-message'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -180,10 +185,20 @@ export default function PublicLoading() {
   const editingItem = editingItemObs ? itens.find((i) => i.id === editingItemObs.id) : null
 
   const getItemQuantidade = (item: RomaneioItem): string => {
-    if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
+    const prod = item.expand?.produto
+    const isUn = isUnidadeProduto(prod?.unidade_medida)
+
+    if (isUn) {
+      if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
+        return `${formatWeight(item.peso_total_kg)} un`
+      }
+      return formatBoxesAndPieces(item.caixas, item.pecas, 'unidade')
+    }
+
+    if (!prod?.peso_caixa_kg || prod.peso_caixa_kg <= 0) {
       return `${formatWeight(item.peso_total_kg)} kg`
     }
-    return formatBoxesAndPieces(item.caixas, item.pecas)
+    return formatBoxesAndPieces(item.caixas, item.pecas, 'kg')
   }
 
   const getItemCodigoMarca = (item: RomaneioItem): string => {
@@ -393,9 +408,17 @@ export default function PublicLoading() {
                           </p>
                         )}
                       </div>
-                      <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
-                        {getItemQuantidade(item)}
-                      </p>
+                      <div className="text-right shrink-0">
+                        <p className="font-black text-slate-900 text-sm tabular-nums">
+                          {getItemQuantidade(item)}
+                        </p>
+                        <p className="text-[11px] text-slate-500 tabular-nums">
+                          {formatProductAmount(
+                            item.peso_total_kg,
+                            item.expand?.produto?.unidade_medida,
+                          )}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -540,9 +563,17 @@ export default function PublicLoading() {
                         <p className="text-xs text-slate-400 mt-0.5">{getItemCodigoMarca(item)}</p>
                       )}
                     </div>
-                    <p className="font-black text-slate-900 text-sm tabular-nums shrink-0">
-                      {getItemQuantidade(item)}
-                    </p>
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-slate-900 text-sm tabular-nums">
+                        {getItemQuantidade(item)}
+                      </p>
+                      <p className="text-[11px] text-slate-500 tabular-nums">
+                        {formatProductAmount(
+                          item.peso_total_kg,
+                          item.expand?.produto?.unidade_medida,
+                        )}
+                      </p>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"

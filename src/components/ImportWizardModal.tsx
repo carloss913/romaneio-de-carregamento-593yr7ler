@@ -42,7 +42,14 @@ import {
 import { cn } from '@/lib/utils'
 import { Produto, RomaneioItem, normalizeSecao } from '@/types/database'
 import { parseExcelOrCsvFile, ParsedSheetData } from '@/lib/excel-parser'
-import { convertWeightToBoxesAndPieces, parseBrazilianWeight, formatWeight } from '@/lib/conversion'
+import {
+  convertWeightToBoxesAndPieces,
+  convertUnitsToBoxesAndPieces,
+  formatProductAmount,
+  isUnidadeProduto,
+  parseBrazilianWeight,
+  formatWeight,
+} from '@/lib/conversion'
 import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
 import { updateProduto, createProduto, getProdutos } from '@/services/produtos'
@@ -179,11 +186,27 @@ export function ImportWizardModal({
   }
 
   const applyConversion = (row: ProcessedRow, produto: Produto, pesoKg: number): ProcessedRow => {
+    const isUn = isUnidadeProduto(produto.unidade_medida)
+
+    if (isUn) {
+      const conv = convertUnitsToBoxesAndPieces(pesoKg, produto.pecas_por_caixa)
+      return {
+        ...row,
+        matchedProduto: produto,
+        matchStatus: pesoKg <= 0 ? 'peso_invalido' : 'ok',
+        weightWarning: conv.weightWarning,
+        weightWarningMessage: conv.weightWarningMessage,
+        caixas: conv.caixas,
+        pecas: conv.pecas,
+        textoFormatado: conv.textoFormatado,
+      }
+    }
+
     if (!produto.peso_caixa_kg || produto.peso_caixa_kg <= 0) {
       return {
         ...row,
         matchedProduto: produto,
-        matchStatus: 'ok',
+        matchStatus: pesoKg <= 0 ? 'peso_invalido' : 'ok',
         weightWarning: false,
         caixas: 0,
         pecas: 0,
@@ -348,6 +371,7 @@ export function ImportWizardModal({
           nome: row.nomeFromSheet || row.rawCode,
           marca: row.marca || '',
           secao: row.secao || '',
+          unidade_medida: 'kg',
         },
         rowId: row.id,
         rawCode: row.rawCode,
@@ -489,8 +513,9 @@ export function ImportWizardModal({
   const handleConfirmImport = async () => {
     if (blockedRows.length > 0) {
       toast({
-        title: 'Itens com peso inválido',
-        description: 'Corrija ou remova os itens com peso inválido antes de importar.',
+        title: 'Itens com quantidade/peso inválido',
+        description:
+          'Corrija ou remova os itens com quantidade ou peso inválido antes de importar.',
         variant: 'destructive',
       })
       return
@@ -498,7 +523,7 @@ export function ImportWizardModal({
     if (weightWarningRows.length > 0 && !weightAcknowledged) {
       toast({
         title: 'Confirmação necessária',
-        description: 'Marque a caixa confirmando que os pesos estão corretos.',
+        description: 'Marque a caixa confirmando que as quantidades e pesos estão corretos.',
         variant: 'destructive',
       })
       return
@@ -928,10 +953,10 @@ export function ImportWizardModal({
                       <TableRow>
                         <TableHead>Código</TableHead>
                         <TableHead>Seção</TableHead>
-                        <TableHead>Peso (kg)</TableHead>
+                        <TableHead>Quantidade / Peso</TableHead>
                         <TableHead>Produto</TableHead>
                         <TableHead>Marca</TableHead>
-                        <TableHead>Resultado</TableHead>
+                        <TableHead>Resultado Conversão</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
@@ -995,24 +1020,40 @@ export function ImportWizardModal({
                               {row.weightWarning ||
                               row.matchStatus === 'peso_invalido' ||
                               row.isManuallyFixed ? (
-                                <Input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={
-                                    row.weightInputStr !== undefined
-                                      ? row.weightInputStr
-                                      : row.pesoKg === 0
-                                        ? ''
-                                        : String(row.pesoKg)
-                                  }
-                                  onChange={(e) => handleWeightInputChange(row.id, e.target.value)}
-                                  className="h-7 text-xs w-24 font-medium border-amber-400 bg-amber-50/60 focus-visible:ring-amber-500"
-                                  title="Editar peso deste item (kg)"
-                                  placeholder="0.000"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={
+                                      row.weightInputStr !== undefined
+                                        ? row.weightInputStr
+                                        : row.pesoKg === 0
+                                          ? ''
+                                          : String(row.pesoKg)
+                                    }
+                                    onChange={(e) =>
+                                      handleWeightInputChange(row.id, e.target.value)
+                                    }
+                                    className="h-7 text-xs w-24 font-medium border-amber-400 bg-amber-50/60 focus-visible:ring-amber-500"
+                                    title={
+                                      isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                        ? 'Editar quantidade em unidades'
+                                        : 'Editar peso em kg'
+                                    }
+                                    placeholder="0"
+                                  />
+                                  <span className="text-[11px] font-semibold text-slate-500">
+                                    {isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                      ? 'un'
+                                      : 'kg'}
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="font-medium text-slate-700 text-xs px-1">
-                                  {formatWeight(row.pesoKg)}
+                                  {formatProductAmount(
+                                    row.pesoKg,
+                                    row.matchedProduto?.unidade_medida,
+                                  )}
                                 </span>
                               )}
                             </TableCell>
@@ -1036,7 +1077,10 @@ export function ImportWizardModal({
                             <TableCell>
                               {row.matchStatus === 'ok' && !row.weightWarning && (
                                 <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 border-emerald-500/30">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" /> OK
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />{' '}
+                                  {isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                    ? 'Unidade OK'
+                                    : 'OK'}
                                 </Badge>
                               )}
                               {row.matchStatus === 'ok' && row.weightWarning && (
@@ -1045,7 +1089,10 @@ export function ImportWizardModal({
                                   className="text-amber-600 border-amber-400 bg-amber-50"
                                   title={row.weightWarningMessage}
                                 >
-                                  <AlertTriangle className="w-3 h-3 mr-1" /> Peso
+                                  <AlertTriangle className="w-3 h-3 mr-1" />{' '}
+                                  {isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                    ? 'Conferir Qtd'
+                                    : 'Peso'}
                                 </Badge>
                               )}
                               {row.matchStatus === 'auto_cadastrar' && (
@@ -1060,7 +1107,7 @@ export function ImportWizardModal({
                               )}
                               {row.matchStatus === 'peso_invalido' && (
                                 <Badge variant="destructive">
-                                  <AlertTriangle className="w-3 h-3 mr-1" /> Peso Inválido
+                                  <AlertTriangle className="w-3 h-3 mr-1" /> Qtd/Peso Inválido
                                 </Badge>
                               )}
                             </TableCell>
@@ -1247,7 +1294,9 @@ export function ImportWizardModal({
 
                             <div className="flex items-center gap-1.5 shrink-0">
                               <Label className="text-[11px] text-amber-900 font-semibold whitespace-nowrap">
-                                Peso (kg):
+                                {isUnidadeProduto(row.matchedProduto?.unidade_medida)
+                                  ? 'Qtd (un):'
+                                  : 'Peso (kg):'}
                               </Label>
                               <Input
                                 type="text"
@@ -1274,8 +1323,8 @@ export function ImportWizardModal({
                         onCheckedChange={(v) => setWeightAcknowledged(!!v)}
                       />
                       <span className="text-xs text-amber-800 font-medium">
-                        Confirmo que revisei os pesos e estão corretos (será gravada a observação
-                        "conferir peso")
+                        Confirmo que revisei as quantidades/pesos e estão corretos (será gravada a
+                        observação "conferir peso")
                       </span>
                     </label>
                   </div>

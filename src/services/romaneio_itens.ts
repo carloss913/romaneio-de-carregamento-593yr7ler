@@ -60,7 +60,25 @@ export const refreshRomaneioItens = async (
     let newCaixas = item.caixas
     let newPecas = item.pecas
 
-    if (produto.peso_caixa_kg && produto.peso_caixa_kg > 0 && item.peso_total_kg > 0) {
+    if (produto.unidade_medida === 'unidade') {
+      if (item.peso_total_kg > 0) {
+        const upc = Math.round(produto.pecas_por_caixa ?? 0)
+        let calcCx = 0
+        let calcPc = 0
+        if (upc > 0) {
+          calcCx = Math.floor(item.peso_total_kg / upc)
+          calcPc = Math.round(item.peso_total_kg % upc)
+        } else {
+          calcCx = 0
+          calcPc = Math.round(item.peso_total_kg)
+        }
+        if (calcCx !== item.caixas || calcPc !== item.pecas) {
+          newCaixas = calcCx
+          newPecas = calcPc
+          needsUpdate = true
+        }
+      }
+    } else if (produto.peso_caixa_kg && produto.peso_caixa_kg > 0 && item.peso_total_kg > 0) {
       const conv = convertWeightToBoxesAndPieces(
         item.peso_total_kg,
         produto.peso_caixa_kg,

@@ -15,7 +15,7 @@ export const PRODUCT_FIELDS: { key: ProductField; label: string; required: boole
   { key: 'secao', label: 'Seção', required: false },
   { key: 'peso_caixa_kg', label: 'Peso da Caixa (kg)', required: false },
   { key: 'peso_peca_kg', label: 'Peso da Peça (kg)', required: false },
-  { key: 'pecas_por_caixa', label: 'Peças por Caixa', required: false },
+  { key: 'pecas_por_caixa', label: 'Peças / Unidades por Caixa', required: false },
 ]
 
 const SUGGESTIONS: [RegExp, ProductField][] = [

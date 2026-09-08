@@ -27,6 +27,7 @@ export interface InitialProdutoData {
   nome?: string
   marca?: string
   secao?: 'CONGELADO' | 'GERAL' | 'RESFRIADO' | string
+  unidade_medida?: 'kg' | 'unidade'
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number
@@ -55,10 +56,13 @@ export function ProdutoModal({
   const [nome, setNome] = useState('')
   const [marca, setMarca] = useState('')
   const [secao, setSecao] = useState<'CONGELADO' | 'GERAL' | 'RESFRIADO' | '__NONE'>('__NONE')
+  const [unidadeMedida, setUnidadeMedida] = useState<'kg' | 'unidade'>('kg')
   const [pesoCaixa, setPesoCaixa] = useState<number | ''>('')
   const [pecasPorCaixa, setPecasPorCaixa] = useState<number | ''>('')
   const [pesoPeca, setPesoPeca] = useState<number | ''>('')
   const [ativo, setAtivo] = useState(true)
+
+  const isUnidade = unidadeMedida === 'unidade'
 
   useEffect(() => {
     if (!open) return
@@ -68,6 +72,7 @@ export function ProdutoModal({
       setNome(produto.nome || '')
       setMarca(produto.marca || '')
       setSecao((normalizeSecao(produto.secao) as any) || '__NONE')
+      setUnidadeMedida(produto.unidade_medida === 'unidade' ? 'unidade' : 'kg')
       setPesoCaixa(produto.peso_caixa_kg ?? '')
       setPecasPorCaixa(produto.pecas_por_caixa ?? '')
       setPesoPeca(produto.peso_peca_kg ?? '')
@@ -77,6 +82,7 @@ export function ProdutoModal({
       setNome(initialData?.nome || initialName || '')
       setMarca(initialData?.marca || '')
       setSecao((normalizeSecao(initialData?.secao) as any) || '__NONE')
+      setUnidadeMedida(initialData?.unidade_medida === 'unidade' ? 'unidade' : 'kg')
       setPesoCaixa(initialData?.peso_caixa_kg ?? '')
       setPecasPorCaixa(initialData?.pecas_por_caixa ?? '')
       setPesoPeca(initialData?.peso_peca_kg ?? '')
@@ -113,9 +119,10 @@ export function ProdutoModal({
           nome: nome.trim(),
           marca: marca.trim(),
           secao: secaoVal,
-          peso_caixa_kg: pesoCaixa === '' ? 0 : Number(pesoCaixa),
+          unidade_medida: unidadeMedida,
+          peso_caixa_kg: isUnidade ? 0 : pesoCaixa === '' ? 0 : Number(pesoCaixa),
           pecas_por_caixa: pecasPorCaixa === '' ? 0 : Number(pecasPorCaixa),
-          peso_peca_kg: pesoPeca === '' ? 0 : Number(pesoPeca),
+          peso_peca_kg: isUnidade ? 0 : pesoPeca === '' ? 0 : Number(pesoPeca),
           ativo,
         })
         toast({ title: 'Produto atualizado!', description: `${saved.nome} foi salvo com sucesso.` })
@@ -125,9 +132,10 @@ export function ProdutoModal({
           nome: nome.trim(),
           marca: marca.trim(),
           secao: secaoVal,
-          peso_caixa_kg: pesoCaixa === '' ? 0 : Number(pesoCaixa),
+          unidade_medida: unidadeMedida,
+          peso_caixa_kg: isUnidade ? 0 : pesoCaixa === '' ? 0 : Number(pesoCaixa),
           pecas_por_caixa: pecasPorCaixa === '' ? 0 : Number(pecasPorCaixa),
-          peso_peca_kg: pesoPeca === '' ? 0 : Number(pesoPeca),
+          peso_peca_kg: isUnidade ? 0 : pesoPeca === '' ? 0 : Number(pesoPeca),
           ativo,
         })
         toast({ title: 'Produto criado!', description: `${saved.nome} adicionado ao catálogo.` })
@@ -177,7 +185,7 @@ export function ProdutoModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="marca">Marca</Label>
               <Input
@@ -201,55 +209,103 @@ export function ProdutoModal({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="pesoCaixa">Peso da Caixa (kg)</Label>
-              <Input
-                id="pesoCaixa"
-                type="number"
-                step="any"
-                value={pesoCaixa}
-                placeholder="Ex: 20"
-                onChange={(e) => {
-                  const val = e.target.value === '' ? '' : Number(e.target.value)
-                  setPesoCaixa(val)
-                  handleCaixaOrPecasChange(val, pecasPorCaixa)
-                }}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="pecasPorCaixa">Peças por Caixa</Label>
-              <Input
-                id="pecasPorCaixa"
-                type="number"
-                step="any"
-                value={pecasPorCaixa}
-                placeholder="Ex: 10"
-                onChange={(e) => {
-                  const val = e.target.value === '' ? '' : Number(e.target.value)
-                  setPecasPorCaixa(val)
-                  handleCaixaOrPecasChange(pesoCaixa, val)
-                }}
-              />
+              <Label htmlFor="unidadeMedida">Unidade de Medida</Label>
+              <Select
+                value={unidadeMedida}
+                onValueChange={(val: 'kg' | 'unidade') => setUnidadeMedida(val)}
+              >
+                <SelectTrigger id="unidadeMedida" className="font-semibold">
+                  <SelectValue placeholder="Selecione a unidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kg">KG</SelectItem>
+                  <SelectItem value="unidade">Unidade (peças/copos)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="pesoPeca">
-              Peso da Peça (kg) <span className="text-xs text-slate-400">(opcional)</span>
-            </Label>
-            <Input
-              id="pesoPeca"
-              type="number"
-              step="any"
-              value={pesoPeca}
-              placeholder="Ex: 2.0"
-              onChange={(e) => setPesoPeca(e.target.value === '' ? '' : Number(e.target.value))}
-            />
-          </div>
+          {isUnidade ? (
+            <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-3">
+              <div className="text-xs text-amber-800">
+                <strong>Produto em Unidade:</strong> A quantidade na planilha é tratada em unidades
+                (ex.: 24 copos de água de coco). Sem conversão de peso em kg.
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pecasPorCaixa" className="text-amber-950 font-bold">
+                  Unidades na Caixa{' '}
+                  <span className="text-xs text-slate-400 font-normal">(opcional)</span>
+                </Label>
+                <Input
+                  id="pecasPorCaixa"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={pecasPorCaixa}
+                  placeholder="Ex: 12 (12 unidades por caixa)"
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? '' : Number(e.target.value)
+                    setPecasPorCaixa(val)
+                  }}
+                  className="bg-white border-amber-300"
+                />
+                <p className="text-[11px] text-amber-700">
+                  Ex.: se a caixa tem 12 unidades e a quantidade for 24, calcula 2 cx.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="pesoCaixa">Peso da Caixa (kg)</Label>
+                  <Input
+                    id="pesoCaixa"
+                    type="number"
+                    step="any"
+                    value={pesoCaixa}
+                    placeholder="Ex: 20"
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value)
+                      setPesoCaixa(val)
+                      handleCaixaOrPecasChange(val, pecasPorCaixa)
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="pecasPorCaixa">Peças por Caixa</Label>
+                  <Input
+                    id="pecasPorCaixa"
+                    type="number"
+                    step="any"
+                    value={pecasPorCaixa}
+                    placeholder="Ex: 10"
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value)
+                      setPecasPorCaixa(val)
+                      handleCaixaOrPecasChange(pesoCaixa, val)
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="pesoPeca">
+                  Peso da Peça (kg) <span className="text-xs text-slate-400">(opcional)</span>
+                </Label>
+                <Input
+                  id="pesoPeca"
+                  type="number"
+                  step="any"
+                  value={pesoPeca}
+                  placeholder="Ex: 2.0"
+                  onChange={(e) => setPesoPeca(e.target.value === '' ? '' : Number(e.target.value))}
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex items-center justify-between pt-2 border-t">
             <Label htmlFor="ativo" className="cursor-pointer">

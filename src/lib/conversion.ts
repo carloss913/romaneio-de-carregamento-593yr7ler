@@ -6,8 +6,66 @@ export interface ConversionResult {
   weightWarningMessage?: string
 }
 
+export function isUnidadeProduto(unidadeMedida?: string | null): boolean {
+  return unidadeMedida === 'unidade'
+}
+
 export function hasPecaData(pesoPecaKg?: number, pecasPorCaixa?: number): boolean {
   return (pesoPecaKg ?? 0) > 0 && (pecasPorCaixa ?? 0) > 0
+}
+
+/**
+ * Conversão específica para produtos vendidos por unidade.
+ * A quantidade informada é em unidades (ex.: 24 copos de água de coco).
+ * - Se pecasPorCaixa (unidades por caixa) estiver configurado > 0:
+ *   caixas = Math.floor(quantidade / unidadesPorCaixa)
+ *   pecas = quantidade % unidadesPorCaixa (restante avulso em unidades)
+ * - Se não houver pecasPorCaixa:
+ *   caixas = 0, pecas = quantidade
+ */
+export function convertUnitsToBoxesAndPieces(
+  quantidadeTotal: number,
+  unidadesPorCaixa?: number,
+): ConversionResult {
+  if (quantidadeTotal <= 0) {
+    return {
+      caixas: 0,
+      pecas: 0,
+      textoFormatado: '0 un',
+      weightWarning: true,
+      weightWarningMessage: 'Quantidade inválida (zero, negativa ou em branco).',
+    }
+  }
+
+  const upc = Math.round(unidadesPorCaixa ?? 0)
+  if (upc <= 0) {
+    const qtdRound = Math.round(quantidadeTotal)
+    return {
+      caixas: 0,
+      pecas: qtdRound,
+      textoFormatado: `${qtdRound} un`,
+      weightWarning: false,
+    }
+  }
+
+  const caixas = Math.floor(quantidadeTotal / upc)
+  const pecas = Math.round(quantidadeTotal % upc)
+
+  let texto = ''
+  if (caixas > 0 && pecas > 0) {
+    texto = `${caixas} cx + ${pecas} un`
+  } else if (caixas > 0) {
+    texto = `${caixas} cx`
+  } else {
+    texto = `${pecas} un`
+  }
+
+  return {
+    caixas,
+    pecas,
+    textoFormatado: texto,
+    weightWarning: false,
+  }
 }
 
 export function convertWeightToBoxesAndPieces(
@@ -92,11 +150,34 @@ export function convertWeightToBoxesAndPieces(
   }
 }
 
-export function formatBoxesAndPieces(caixas: number, pecas: number): string {
-  if (caixas === 0 && pecas === 0) return '0 cx'
-  if (caixas > 0 && pecas > 0) return `${caixas} cx + ${pecas} pct`
+export function formatBoxesAndPieces(
+  caixas: number,
+  pecas: number,
+  unidadeMedida?: string | null,
+): string {
+  const isUn = isUnidadeProduto(unidadeMedida)
+  const sufixoPeca = isUn ? 'un' : 'pct'
+
+  if (caixas === 0 && pecas === 0) return isUn ? '0 un' : '0 cx'
+  if (caixas > 0 && pecas > 0) return `${caixas} cx + ${pecas} ${sufixoPeca}`
   if (caixas > 0) return `${caixas} cx`
-  return `${pecas} pct`
+  return `${pecas} ${sufixoPeca}`
+}
+
+/**
+ * Formata a quantidade/peso de um produto respeitando sua unidade de medida.
+ * Para itens em unidade: exibe "24 un" (nunca "24kg").
+ * Para itens em kg: exibe "24 kg".
+ */
+export function formatProductAmount(
+  valor: number | null | undefined,
+  unidadeMedida?: string | null,
+): string {
+  const formatted = formatWeight(valor)
+  if (isUnidadeProduto(unidadeMedida)) {
+    return `${formatted} un`
+  }
+  return `${formatted} kg`
 }
 
 /**

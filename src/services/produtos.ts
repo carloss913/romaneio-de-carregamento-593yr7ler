@@ -10,6 +10,7 @@ export const createProduto = (data: {
   nome: string
   marca?: string
   secao?: string
+  unidade_medida?: 'kg' | 'unidade'
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number
@@ -23,6 +24,7 @@ export const updateProduto = (
     nome: string
     marca: string
     secao: string
+    unidade_medida: 'kg' | 'unidade'
     peso_caixa_kg: number
     pecas_por_caixa: number
     peso_peca_kg: number

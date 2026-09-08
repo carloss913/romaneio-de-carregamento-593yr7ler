@@ -1,5 +1,10 @@
 import { Romaneio, RomaneioItem } from '@/types/database'
-import { formatBoxesAndPieces, formatWeight } from '@/lib/conversion'
+import {
+  formatBoxesAndPieces,
+  formatProductAmount,
+  formatWeight,
+  isUnidadeProduto,
+} from '@/lib/conversion'
 
 interface PrintManifestProps {
   romaneio: Romaneio
@@ -7,15 +12,30 @@ interface PrintManifestProps {
 }
 
 export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
-  const totalPeso = itens.reduce((acc, i) => acc + i.peso_total_kg, 0)
+  const totalPeso = itens
+    .filter((i) => !isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .reduce((acc, i) => acc + i.peso_total_kg, 0)
+  const totalUnidades = itens
+    .filter((i) => isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .reduce((acc, i) => acc + i.peso_total_kg, 0)
   const totalCaixas = itens.reduce((acc, i) => acc + i.caixas, 0)
   const totalPecas = itens.reduce((acc, i) => acc + i.pecas, 0)
 
   const getItemQuantidade = (item: RomaneioItem): string => {
-    if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
+    const prod = item.expand?.produto
+    const isUn = isUnidadeProduto(prod?.unidade_medida)
+
+    if (isUn) {
+      if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
+        return `${formatWeight(item.peso_total_kg)} un`
+      }
+      return formatBoxesAndPieces(item.caixas, item.pecas, 'unidade')
+    }
+
+    if (!prod?.peso_caixa_kg || prod.peso_caixa_kg <= 0) {
       return `${formatWeight(item.peso_total_kg)} kg`
     }
-    return formatBoxesAndPieces(item.caixas, item.pecas)
+    return formatBoxesAndPieces(item.caixas, item.pecas, 'kg')
   }
 
   return (
@@ -67,7 +87,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             <th className="py-1.5 px-1 w-14">Cód.</th>
             <th className="hidden print:hidden py-1.5 px-1 w-20">Seção</th>
             <th className="py-1.5 px-1">Descrição do Produto</th>
-            <th className="py-1.5 px-1 text-right w-20">Peso (kg)</th>
+            <th className="py-1.5 px-1 text-right w-20">Qtd / Peso</th>
             <th className="py-1.5 px-1 text-right w-24">Quantidade</th>
           </tr>
         </thead>
@@ -127,7 +147,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                   style={customHeight ? { height: `${customHeight}px` } : undefined}
                   className="py-1.5 px-1 text-right tabular-nums align-top whitespace-nowrap text-[11px]"
                 >
-                  {formatWeight(item.peso_total_kg)} kg
+                  {formatProductAmount(item.peso_total_kg, prod?.unidade_medida)}
                 </td>
                 <td
                   style={customHeight ? { height: `${customHeight}px` } : undefined}
@@ -147,6 +167,11 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
             <td className="py-1.5 px-1"></td>
             <td className="py-1.5 px-1 text-right tabular-nums whitespace-nowrap">
               {formatWeight(totalPeso)} kg
+              {totalUnidades > 0 && (
+                <span className="block text-[10px] text-slate-700">
+                  +{formatWeight(totalUnidades)} un
+                </span>
+              )}
             </td>
             <td className="py-1.5 px-1 text-right text-black font-bold text-[11px]">
               {totalCaixas > 0 && `${totalCaixas} cx `}

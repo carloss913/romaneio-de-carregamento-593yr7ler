@@ -9,11 +9,14 @@ export interface Rota extends RecordModel {
   ordem?: number
 }
 
+export type UnidadeMedida = 'kg' | 'unidade'
+
 export interface Produto extends RecordModel {
   codigo: string
   nome: string
   marca?: string
   secao?: 'CONGELADO' | 'GERAL' | 'RESFRIADO'
+  unidade_medida?: UnidadeMedida
   peso_caixa_kg?: number
   pecas_por_caixa?: number
   peso_peca_kg?: number

@@ -29,7 +29,14 @@ import {
 import { getProdutos, updateProduto } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
 import { refreshRomaneioItens } from '@/services/romaneio_itens'
-import { convertWeightToBoxesAndPieces, formatBoxesAndPieces, formatWeight } from '@/lib/conversion'
+import {
+  convertWeightToBoxesAndPieces,
+  convertUnitsToBoxesAndPieces,
+  formatBoxesAndPieces,
+  formatProductAmount,
+  formatWeight,
+  isUnidadeProduto,
+} from '@/lib/conversion'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -234,7 +241,12 @@ export default function RomaneioDetail() {
     return descA.localeCompare(descB, 'pt-BR', { sensitivity: 'base' })
   })
 
-  const totalPeso = itens.reduce((a, b) => a + b.peso_total_kg, 0)
+  const totalPeso = itens
+    .filter((i) => !isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .reduce((a, b) => a + b.peso_total_kg, 0)
+  const totalUnidades = itens
+    .filter((i) => isUnidadeProduto(i.expand?.produto?.unidade_medida))
+    .reduce((a, b) => a + b.peso_total_kg, 0)
   const totalCaixas = itens.reduce((a, b) => a + b.caixas, 0)
   const totalPecas = itens.reduce((a, b) => a + b.pecas, 0)
 
@@ -260,12 +272,14 @@ export default function RomaneioDetail() {
     const prod = produtos.find((p) => p.id === selectedProdutoId)
     if (!prod) return
 
-    const conv = convertWeightToBoxesAndPieces(
-      Number(pesoManual),
-      prod.peso_caixa_kg,
-      prod.peso_peca_kg,
-      prod.pecas_por_caixa,
-    )
+    const conv = isUnidadeProduto(prod.unidade_medida)
+      ? convertUnitsToBoxesAndPieces(Number(pesoManual), prod.pecas_por_caixa)
+      : convertWeightToBoxesAndPieces(
+          Number(pesoManual),
+          prod.peso_caixa_kg,
+          prod.peso_peca_kg,
+          prod.pecas_por_caixa,
+        )
 
     try {
       await createRomaneioItem({
@@ -448,10 +462,20 @@ export default function RomaneioDetail() {
   }
 
   const getItemQuantidade = (item: RomaneioItem): string => {
-    if (!item.expand?.produto?.peso_caixa_kg || item.expand?.produto?.peso_caixa_kg <= 0) {
+    const prod = item.expand?.produto
+    const isUn = isUnidadeProduto(prod?.unidade_medida)
+
+    if (isUn) {
+      if (!prod?.pecas_por_caixa || prod.pecas_por_caixa <= 0) {
+        return `${formatWeight(item.peso_total_kg)} un`
+      }
+      return formatBoxesAndPieces(item.caixas, item.pecas, 'unidade')
+    }
+
+    if (!prod?.peso_caixa_kg || prod.peso_caixa_kg <= 0) {
       return `${formatWeight(item.peso_total_kg)} kg`
     }
-    return formatBoxesAndPieces(item.caixas, item.pecas)
+    return formatBoxesAndPieces(item.caixas, item.pecas, 'kg')
   }
 
   return (
@@ -598,6 +622,11 @@ export default function RomaneioDetail() {
             <p className="text-2xl font-black text-slate-800 tabular-nums mt-1">
               {formatWeight(totalPeso)} kg
             </p>
+            {totalUnidades > 0 && (
+              <p className="text-xs font-bold text-amber-700 mt-1">
+                + {formatWeight(totalUnidades)} un (em unidades)
+              </p>
+            )}
           </div>
 
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
@@ -705,7 +734,7 @@ export default function RomaneioDetail() {
                   <TableHead>Seção</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead>Marca</TableHead>
-                  <TableHead className="text-right">Peso Total (kg)</TableHead>
+                  <TableHead className="text-right">Qtd / Peso</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
                   <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
@@ -820,14 +849,22 @@ export default function RomaneioDetail() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Peso Total da Carga (kg)</Label>
+              <Label>
+                {selectedProd && isUnidadeProduto(selectedProd.unidade_medida)
+                  ? 'Quantidade Total (unidades)'
+                  : 'Peso Total da Carga (kg)'}
+              </Label>
               <Input
                 type="number"
                 step="any"
                 min="0.001"
                 value={pesoManual}
                 onChange={(e) => setPesoManual(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Ex: 100.555"
+                placeholder={
+                  selectedProd && isUnidadeProduto(selectedProd.unidade_medida)
+                    ? 'Ex: 24 (copos/peças)'
+                    : 'Ex: 100.555'
+                }
                 required
               />
             </div>

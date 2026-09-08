@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { RomaneioItem } from '@/types/database'
-import { formatWeight } from '@/lib/conversion'
+import { formatProductAmount, isUnidadeProduto } from '@/lib/conversion'
 import { TableRow, TableCell } from '@/components/ui/table'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
@@ -102,6 +102,7 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
   const prod = item.expand?.produto
   const currentSecao = prod?.secao
   const displaySecao = currentSecao ? currentSecao : '—'
+  const isUn = isUnidadeProduto(prod?.unidade_medida)
   const hasCustomHeight = localHeight !== null && localHeight > 48
 
   return (
@@ -204,7 +205,9 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
         style={localHeight ? { height: `${localHeight}px` } : undefined}
         className="text-right font-medium tabular-nums align-top pt-3 pb-3"
       >
-        {formatWeight(item.peso_total_kg)} kg
+        <span className={isUn ? 'text-amber-800 font-semibold' : ''}>
+          {formatProductAmount(item.peso_total_kg, prod?.unidade_medida)}
+        </span>
       </TableCell>
       <TableCell
         style={localHeight ? { height: `${localHeight}px` } : undefined}
