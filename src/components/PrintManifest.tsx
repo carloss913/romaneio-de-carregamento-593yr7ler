@@ -86,7 +86,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                     : undefined
                 }
                 className={`border-b border-slate-200 print-row ${
-                  idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'
+                  idx % 2 === 1 ? 'bg-slate-200/80' : 'bg-white'
                 }`}
               >
                 <td
