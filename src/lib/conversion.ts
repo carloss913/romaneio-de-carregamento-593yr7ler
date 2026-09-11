@@ -256,16 +256,17 @@ export function formatProductAmount(
 }
 
 /**
- * Formata um peso em kg sem arredondar para baixo nem truncar casas decimais significativas.
- * Exibe até 3 casas decimais preservando o valor digitado/importado fielmente:
- * Ex.: 10 -> "10", 10.5 -> "10.5", 10.55 -> "10.55", 10.555 -> "10.555".
+ * Formata um peso em kg (ou unidades decimais):
+ * Caso o peso tenha casa decimal, exibe com exatamente 3 casas após a vírgula (ex.: 2,5 -> "2,500", 1,275 -> "1,275").
+ * Se for número inteiro, exibe sem casas decimais (ex.: 10 -> "10", 0 -> "0").
  */
 export function formatWeight(peso: number | null | undefined): string {
   if (peso == null || isNaN(peso)) return '0'
-  // Limita a 3 casas decimais caso haja dízimas de ponto flutuante do JS
+  // Limita a 3 casas decimais arredondando eventuais dízimas de ponto flutuante do JS
   const fixed = Number(peso.toFixed(3))
+  const hasDecimal = Math.abs(fixed % 1) > 0.00001
   return fixed.toLocaleString('pt-BR', {
-    minimumFractionDigits: 0,
+    minimumFractionDigits: hasDecimal ? 3 : 0,
     maximumFractionDigits: 3,
   })
 }
