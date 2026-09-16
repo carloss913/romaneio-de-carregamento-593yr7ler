@@ -181,6 +181,7 @@
   .print-row {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    border-bottom: 1px solid #94a3b8 !important;
   }
 
   /* Evitar que blocos finais quebrem sozinhos */

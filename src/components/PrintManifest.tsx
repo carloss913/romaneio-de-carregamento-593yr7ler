@@ -115,7 +115,7 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                     ? { height: `${customHeight}px`, minHeight: `${customHeight}px` }
                     : undefined
                 }
-                className={`border-b border-slate-200 print-row ${
+                className={`border-b border-slate-400 print-row ${
                   idx % 2 === 1 ? 'bg-slate-200/80' : 'bg-white'
                 }`}
               >
