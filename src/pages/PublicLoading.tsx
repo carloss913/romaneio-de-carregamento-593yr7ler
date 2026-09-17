@@ -404,6 +404,7 @@ export default function PublicLoading() {
                           }`}
                         >
                           {item.expand?.produto?.nome || 'Produto'}
+                          {item.obs_acrescimo && item.obs_acrescimo.trim() ? ' *' : ''}
                         </p>
                         {item.observacao && item.observacao.trim() ? (
                           <div className="text-xs text-amber-700 font-normal mt-0.5 leading-tight">
@@ -561,6 +562,7 @@ export default function PublicLoading() {
                         }`}
                       >
                         {item.expand?.produto?.nome || 'Produto'}
+                        {item.obs_acrescimo && item.obs_acrescimo.trim() ? ' *' : ''}
                       </p>
                       {item.observacao && item.observacao.trim() ? (
                         <div className="text-xs text-amber-700 font-normal mt-0.5 leading-tight">
@@ -786,6 +788,7 @@ export default function PublicLoading() {
               <div className="text-sm">
                 <p className="font-semibold text-slate-800">
                   {editingItem.expand?.produto?.nome || 'Produto'}
+                  {editingItem.obs_acrescimo && editingItem.obs_acrescimo.trim() ? ' *' : ''}
                 </p>
                 {getItemCodigoMarca(editingItem) && (
                   <p className="text-xs text-slate-400">{getItemCodigoMarca(editingItem)}</p>

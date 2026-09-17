@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-17T22:22:20.300Z",
+  "generatedAt": "2026-09-17T22:40:48.651Z",
   "collections": [
     {
       "name": "users",
@@ -272,6 +272,12 @@
         {
           "name": "altura_linha",
           "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "obs_acrescimo",
+          "type": "text",
           "required": false,
           "system": false
         }

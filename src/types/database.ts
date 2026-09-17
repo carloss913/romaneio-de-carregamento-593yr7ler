@@ -40,6 +40,7 @@ export interface RomaneioItem extends RecordModel {
   pecas: number
   carregado: boolean
   observacao?: string
+  obs_acrescimo?: string
   altura_linha?: number
   expand?: {
     produto?: Produto

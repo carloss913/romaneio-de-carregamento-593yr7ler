@@ -53,7 +53,7 @@ import {
   parseBrazilianWeight,
   formatWeight,
 } from '@/lib/conversion'
-import { createRomaneioItem } from '@/services/romaneio_itens'
+import { createRomaneioItem, updateRomaneioItem } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
 import { updateProduto, createProduto, getProdutos } from '@/services/produtos'
 import { ProdutoModal, InitialProdutoData } from './ProdutoModal'
@@ -451,8 +451,8 @@ export function ImportWizardModal({
     setProcessedRows((prev) => prev.filter((row) => row.matchStatus !== 'peso_invalido'))
   }
 
-  // Executa uma operação com até 3 tentativas no total se houver 429 Too Many Requests com backoff exponencial (5s → 10s → 20s)
-  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
+  // Executa uma operação com até 5 tentativas no total se houver 429 Too Many Requests ou erro transitório com backoff exponencial
+  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 5): Promise<T> => {
     let attempt = 0
     while (attempt < maxRetries) {
       try {
@@ -466,9 +466,9 @@ export function ImportWizardModal({
             'status' in err &&
             (err as any).status === 429)
 
-        if (is429 && attempt < maxRetries) {
-          const retryDelays = [5000, 10000, 20000]
-          const delayTime = retryDelays[attempt - 1] ?? 20000
+        if (attempt < maxRetries) {
+          const retryDelays = [2000, 5000, 10000, 15000, 20000]
+          const delayTime = is429 ? (retryDelays[attempt - 1] ?? 20000) : 1000 * attempt
           await new Promise((resolve) => setTimeout(resolve, delayTime))
           continue
         }
@@ -668,30 +668,83 @@ export function ImportWizardModal({
         })
       }
 
-      // 3. Criar itens do romaneio (para produtos válidos e produtos auto-cadastrados com sucesso)
-      interface ItemToCreate {
+      // 3. Processar itens do romaneio: somar aos itens existentes se mesmo código de produto ou criar novos
+      interface ItemOperation {
         row: ProcessedRow
         produtoId: string
+        produtoObj: Produto
         pesoKg: number
         caixas: number
         pecas: number
         observacao?: string
+        isUpdate: boolean
+        existingItem?: RomaneioItem
+        newTotalPesoKg?: number
+        newObsAcrescimo?: string
       }
 
-      const itensToCreate: ItemToCreate[] = []
+      // Montar mapa dos itens já existentes no romaneio indexados por código do produto (trimmed)
+      const existingByCode = new Map<string, RomaneioItem>()
+      existingItens.forEach((item) => {
+        const prod = item.expand?.produto || produtos.find((p) => p.id === item.produto)
+        if (prod?.codigo) {
+          const normCode = prod.codigo.trim()
+          if (!existingByCode.has(normCode)) {
+            existingByCode.set(normCode, item)
+          }
+        }
+      })
+
+      const now = new Date()
+      const diaMes = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`
+
+      const operationsToExecute: ItemOperation[] = []
 
       for (const row of valid) {
         if (row.matchedProduto) {
           const finalPeso = row.pesoKg
           const needsConferirPeso = row.weightWarning || row.isManuallyFixed
-          itensToCreate.push({
-            row,
-            produtoId: row.matchedProduto.id,
-            pesoKg: finalPeso,
-            caixas: row.caixas,
-            pecas: row.pecas,
-            observacao: needsConferirPeso ? 'conferir peso' : undefined,
-          })
+          const rowCode = (row.matchedProduto.codigo || row.rawCode || '').trim()
+          const existing = existingByCode.get(rowCode)
+
+          if (existing) {
+            // Item repetido! Somar peso e recalcular
+            const somadoPesoKg =
+              Math.round(((existing.peso_total_kg || 0) + finalPeso) * 1000) / 1000
+            const conv = applyConversion(row, row.matchedProduto, somadoPesoKg)
+
+            const formattedAdded = formatWeight(finalPeso)
+            const unidadeSufixo = isNonKgProduto(row.matchedProduto.unidade_medida) ? 'un' : 'kg'
+            const newNota = `Importação somada: +${formattedAdded} ${unidadeSufixo} (planilha de ${diaMes})`
+            const combinedObsAcrescimo =
+              existing.obs_acrescimo && existing.obs_acrescimo.trim()
+                ? `${existing.obs_acrescimo.trim()} | ${newNota}`
+                : newNota
+
+            operationsToExecute.push({
+              row,
+              produtoId: row.matchedProduto.id,
+              produtoObj: row.matchedProduto,
+              pesoKg: finalPeso,
+              caixas: conv.caixas,
+              pecas: conv.pecas,
+              isUpdate: true,
+              existingItem: existing,
+              newTotalPesoKg: somadoPesoKg,
+              newObsAcrescimo: combinedObsAcrescimo,
+            })
+          } else {
+            operationsToExecute.push({
+              row,
+              produtoId: row.matchedProduto.id,
+              produtoObj: row.matchedProduto,
+              pesoKg: finalPeso,
+              caixas: row.caixas,
+              pecas: row.pecas,
+              observacao: needsConferirPeso ? 'conferir peso' : undefined,
+              isUpdate: false,
+            })
+          }
         }
       }
 
@@ -700,13 +753,15 @@ export function ImportWizardModal({
         if (novoProduto) {
           const finalPeso = row.pesoKg
           const needsConferirPeso = row.weightWarning || row.isManuallyFixed
-          itensToCreate.push({
+          operationsToExecute.push({
             row,
             produtoId: novoProduto.id,
+            produtoObj: novoProduto,
             pesoKg: finalPeso,
             caixas: 0,
             pecas: 0,
             observacao: needsConferirPeso ? 'conferir peso' : undefined,
+            isUpdate: false,
           })
         } else {
           // Se o produto falhou no auto-cadastro, não tenta criar o item no romaneio
@@ -717,22 +772,33 @@ export function ImportWizardModal({
       setImportProgress({
         current: toAutoCreate.length,
         total: totalOperations,
-        message: `Salvando itens no romaneio (0 de ${itensToCreate.length})...`,
+        message: `Salvando itens no romaneio (0 de ${operationsToExecute.length})...`,
       })
 
       const itemResults = await processInBatches(
-        itensToCreate,
+        operationsToExecute,
         BATCH_SIZE,
         DELAY_MS,
-        async (item) => {
+        async (op) => {
+          if (op.isUpdate && op.existingItem) {
+            return executeWithRetry(() =>
+              updateRomaneioItem(op.existingItem!.id, {
+                peso_total_kg: op.newTotalPesoKg!,
+                caixas: op.caixas,
+                pecas: op.pecas,
+                obs_acrescimo: op.newObsAcrescimo!,
+              }),
+            )
+          }
+
           return executeWithRetry(() =>
             createRomaneioItem({
               romaneio: romaneioId,
-              produto: item.produtoId,
-              peso_total_kg: item.pesoKg,
-              caixas: item.caixas,
-              pecas: item.pecas,
-              ...(item.observacao ? { observacao: item.observacao } : {}),
+              produto: op.produtoId,
+              peso_total_kg: op.pesoKg,
+              caixas: op.caixas,
+              pecas: op.pecas,
+              ...(op.observacao ? { observacao: op.observacao } : {}),
             }),
           )
         },
@@ -748,17 +814,17 @@ export function ImportWizardModal({
 
       // Computar totais
       itemResults.forEach((res, index) => {
-        const item = itensToCreate[index]
+        const op = operationsToExecute[index]
         if (res.status === 'fulfilled') {
           totalImported++
-          totalCaixas += item.caixas
-          totalPecas += item.pecas
+          totalCaixas += op.caixas
+          totalPecas += op.pecas
         } else {
           totalFailures++
-          const prodIdentifier = item.row.rawCode || 'Desconhecido'
+          const prodIdentifier = op.row.rawCode || 'Desconhecido'
           const errorReason = getErrorMessage(res.reason)
           errorsList.push(`Item [${prodIdentifier}]: ${errorReason}`)
-          console.error(`Erro ao criar item do romaneio para [${prodIdentifier}]:`, res.reason)
+          console.error(`Erro ao gravar item do romaneio para [${prodIdentifier}]:`, res.reason)
         }
       })
 

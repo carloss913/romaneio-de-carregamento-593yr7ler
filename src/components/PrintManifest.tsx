@@ -139,7 +139,10 @@ export function PrintManifest({ romaneio, itens }: PrintManifestProps) {
                   className="py-1.5 px-1 align-top text-[11px]"
                 >
                   <div>
-                    <span className="font-semibold text-black">{prod?.nome || 'Produto'}</span>
+                    <span className="font-semibold text-black">
+                      {prod?.nome || 'Produto'}
+                      {item.obs_acrescimo && item.obs_acrescimo.trim() ? ' *' : ''}
+                    </span>
                     {prod?.marca ? (
                       <span className="text-[11px] text-slate-600 font-normal ml-1">
                         ({prod.marca})

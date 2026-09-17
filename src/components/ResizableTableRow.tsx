@@ -183,11 +183,18 @@ export const ResizableTableRow: React.FC<ResizableTableRowProps> = ({
             }`}
           >
             {prod?.nome || 'Produto'}
+            {item.obs_acrescimo && item.obs_acrescimo.trim() ? ' *' : ''}
           </span>
           {item.observacao && item.observacao.trim() ? (
             <div className="mt-1 inline-flex items-start gap-1 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/70 rounded-md px-2 py-0.5 w-fit max-w-full">
               <span className="font-semibold text-amber-800 shrink-0">Obs:</span>
               <span className="break-words">{item.observacao.trim()}</span>
+            </div>
+          ) : null}
+          {item.obs_acrescimo && item.obs_acrescimo.trim() ? (
+            <div className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-md px-2 py-0.5 w-fit max-w-full">
+              <span>▲</span>
+              <span className="break-words">{item.obs_acrescimo.trim()}</span>
             </div>
           ) : null}
           {hasCustomHeight && (

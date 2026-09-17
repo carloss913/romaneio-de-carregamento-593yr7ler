@@ -16,6 +16,7 @@ export const createRomaneioItem = (data: {
   caixas: number
   pecas: number
   observacao?: string
+  obs_acrescimo?: string
 }) => pb.collection('romaneio_itens').create<RomaneioItem>(data)
 
 export const updateRomaneioItem = (
@@ -26,6 +27,7 @@ export const updateRomaneioItem = (
     pecas: number
     carregado: boolean
     observacao: string
+    obs_acrescimo: string
     altura_linha: number | null
   }>,
 ) => pb.collection('romaneio_itens').update<RomaneioItem>(id, data)
