@@ -167,18 +167,18 @@ export default function PublicLoading() {
 
   const isFinalizado = romaneio.status === 'finalizado'
 
-  const sortedItens = [...itens]
-    .sort((a, b) => {
-      const ca = new Date(a.created).getTime()
-      const cb = new Date(b.created).getTime()
-      if (ca !== cb) return ca - cb
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-    })
-    .sort((a, b) => {
-      const sa = getSecaoOrder(a.expand?.produto?.secao)
-      const sb = getSecaoOrder(b.expand?.produto?.secao)
-      return sa - sb
-    })
+  const sortedItens = [...itens].sort((a, b) => {
+    const sa = getSecaoOrder(a.expand?.produto?.secao)
+    const sb = getSecaoOrder(b.expand?.produto?.secao)
+    if (sa !== sb) return sa - sb
+
+    const descA = a.expand?.produto?.nome || ''
+    const descB = b.expand?.produto?.nome || ''
+    const cmp = descA.localeCompare(descB, 'pt-BR', { sensitivity: 'base' })
+    if (cmp !== 0) return cmp
+
+    return a.id.localeCompare(b.id)
+  })
 
   const carregadoCount = itens.filter((i) => i.carregado).length
 
