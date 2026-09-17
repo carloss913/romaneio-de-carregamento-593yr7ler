@@ -53,7 +53,7 @@ import {
   parseBrazilianWeight,
   formatWeight,
 } from '@/lib/conversion'
-import { createRomaneioItem, deleteItensByRomaneio } from '@/services/romaneio_itens'
+import { createRomaneioItem } from '@/services/romaneio_itens'
 import { updateRomaneio } from '@/services/romaneios'
 import { updateProduto, createProduto, getProdutos } from '@/services/produtos'
 import { ProdutoModal, InitialProdutoData } from './ProdutoModal'
@@ -120,7 +120,6 @@ export function ImportWizardModal({
   const [colSecao, setColSecao] = useState<string>('')
   const [numPaginas, setNumPaginas] = useState<'1' | '2' | '3'>('2')
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([])
-  const [substituir, setSubstituir] = useState(false)
   const [loading, setLoading] = useState(false)
   const [importProgress, setImportProgress] = useState<{
     current: number
@@ -161,7 +160,6 @@ export function ImportWizardModal({
     setColSecao('')
     setNumPaginas('2')
     setProcessedRows([])
-    setSubstituir(false)
     setWeightAcknowledged(false)
     setImportProgress(null)
   }
@@ -574,15 +572,6 @@ export function ImportWizardModal({
     const DELAY_MS = 300
 
     try {
-      if (substituir) {
-        setImportProgress({
-          current: 0,
-          total: totalOperations,
-          message: 'Limpando itens anteriores do romaneio...',
-        })
-        await deleteItensByRomaneio(romaneioId)
-      }
-
       let totalCaixas = 0
       let totalPecas = 0
       let totalImported = 0
@@ -1391,30 +1380,12 @@ export function ImportWizardModal({
                 )}
 
                 {existingItens.length > 0 && (
-                  <div className="border rounded-xl p-4 bg-amber-50 text-left space-y-2 text-xs text-amber-800">
-                    <p className="font-semibold">
-                      Este romaneio já possui {existingItens.length} itens cadastrados.
+                  <div className="border rounded-xl p-3 bg-amber-50 text-left text-xs text-amber-800">
+                    <p>
+                      Este romaneio já possui{' '}
+                      <span className="font-semibold">{existingItens.length}</span> itens
+                      cadastrados. Os novos itens importados serão adicionados a ele.
                     </p>
-                    <div className="flex items-center gap-4 pt-1">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="substituir"
-                          checked={!substituir}
-                          onChange={() => setSubstituir(false)}
-                        />
-                        <span>Adicionar aos existentes</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer text-red-700 font-medium">
-                        <input
-                          type="radio"
-                          name="substituir"
-                          checked={substituir}
-                          onChange={() => setSubstituir(true)}
-                        />
-                        <span>Substituir todos os itens</span>
-                      </label>
-                    </div>
                   </div>
                 )}
               </div>
