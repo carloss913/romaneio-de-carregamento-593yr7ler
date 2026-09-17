@@ -78,17 +78,31 @@ export async function runAutoDelete(): Promise<number> {
   if (alvo.length === 0) return 0
 
   let excluidos = 0
-  await Promise.all(
-    alvo.map(async (rom) => {
-      try {
-        await pb.collection('romaneios').delete(rom.id)
-        excluidos++
-      } catch {
-        // Ignora falhas individuais — itens órfãos podem ter sido
-        // removidos por cascata em outra operação.
-      }
-    }),
-  )
+  const BATCH_SIZE = 5
+  for (let i = 0; i < alvo.length; i += BATCH_SIZE) {
+    const batch = alvo.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (rom) => {
+        try {
+          const itens = await pb.collection('romaneio_itens').getFullList({
+            filter: `romaneio = "${rom.id}"`,
+            fields: 'id',
+          })
+          for (const item of itens) {
+            try {
+              await pb.collection('romaneio_itens').delete(item.id)
+            } catch {
+              /* ignore */
+            }
+          }
+          await pb.collection('romaneios').delete(rom.id)
+          excluidos++
+        } catch {
+          // Ignora falhas individuais
+        }
+      }),
+    )
+  }
 
   return excluidos
 }

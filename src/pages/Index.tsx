@@ -24,22 +24,38 @@ export default function Index() {
       const roms = await getRomaneios()
       setRomaneios(roms)
       if (roms.length > 0) {
-        const filterStr = roms.map((r) => `romaneio="${r.id}"`).join(' || ')
-        try {
-          const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
-            filter: filterStr,
-          })
-          setItens(relevantItens)
-        } catch (errItens: any) {
-          if (
-            errItens?.status === 404 ||
-            errItens?.response?.code === 404 ||
-            errItens?.message?.includes('404')
-          ) {
-            setItens([])
-          } else {
-            console.error('Erro ao carregar itens do painel:', errItens)
+        // Romaneios de hoje e os 5 mais recentes precisam de itens para calcular métricas
+        const todayPrefix = new Date().toISOString().split('T')[0]
+        const relevantRomsMap = new Map<string, Romaneio>()
+        // Adiciona romaneios de hoje
+        roms
+          .filter((r) => r.data.startsWith(todayPrefix))
+          .forEach((r) => relevantRomsMap.set(r.id, r))
+        // Adiciona os 5 mais recentes
+        roms.slice(0, 5).forEach((r) => relevantRomsMap.set(r.id, r))
+
+        const targetIds = Array.from(relevantRomsMap.keys())
+        if (targetIds.length > 0) {
+          const filterStr = targetIds.map((id) => `romaneio="${id}"`).join(' || ')
+          try {
+            const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
+              filter: filterStr,
+              fields: 'id,romaneio,peso_total_kg,caixas,pecas',
+            })
+            setItens(relevantItens)
+          } catch (errItens: any) {
+            if (
+              errItens?.status === 404 ||
+              errItens?.response?.code === 404 ||
+              errItens?.message?.includes('404')
+            ) {
+              setItens([])
+            } else {
+              console.error('Erro ao carregar itens do painel:', errItens)
+            }
           }
+        } else {
+          setItens([])
         }
       } else {
         setItens([])

@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-r
 import { RotaType, Romaneio, RomaneioItem } from '@/types/database'
 import { formatWeight } from '@/lib/conversion'
 import { getRomaneiosByRota, deleteRomaneio } from '@/services/romaneios'
+import { deleteItensByRomaneio } from '@/services/romaneio_itens'
 import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
@@ -42,6 +43,7 @@ export default function RotaDetail() {
       try {
         const itensList = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
           filter,
+          fields: 'id,romaneio,peso_total_kg,caixas,pecas',
         })
         setItens(itensList)
       } catch (errItens: any) {
@@ -102,6 +104,7 @@ export default function RotaDetail() {
   const handleDelete = async () => {
     if (!deleteDialog.id) return
     try {
+      await deleteItensByRomaneio(deleteDialog.id)
       await deleteRomaneio(deleteDialog.id)
       toast.success('Romaneio excluído')
       setDeleteDialog({ open: false })

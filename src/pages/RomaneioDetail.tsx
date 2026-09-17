@@ -25,6 +25,7 @@ import {
   createRomaneioItem,
   updateRomaneioItem,
   deleteRomaneioItem,
+  deleteItensByRomaneio,
 } from '@/services/romaneio_itens'
 import { getProdutos, updateProduto } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
@@ -110,19 +111,18 @@ export default function RomaneioDetail() {
   const loadData = useCallback(async () => {
     if (!id || isDeletedRef.current) return
     try {
-      const rom = await getRomaneio(id)
+      const [rom, listItens, listProds, config] = await Promise.all([
+        getRomaneio(id),
+        getRomaneioItens(id),
+        getProdutos(),
+        getConfiguracoes().catch(() => null),
+      ])
+
       setRomaneio(rom)
       setObsText(rom.observacoes || '')
-      const listItens = await getRomaneioItens(id)
       setItens(listItens)
-      const listProds = await getProdutos()
       setProdutos(listProds)
-      try {
-        const config = await getConfiguracoes()
-        setConfigContato(config?.telefone_contato || '')
-      } catch {
-        /* no config yet */
-      }
+      setConfigContato(config?.telefone_contato || '')
     } catch (err: any) {
       // Se retornar 404 Not Found, o romaneio foi excluído
       if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
@@ -241,7 +241,9 @@ export default function RomaneioDetail() {
 
     const descA = a.expand?.produto?.nome || ''
     const descB = b.expand?.produto?.nome || ''
-    return descA.localeCompare(descB, 'pt-BR', { sensitivity: 'base' })
+    const cmp = descA.localeCompare(descB, 'pt-BR', { sensitivity: 'base' })
+    if (cmp !== 0) return cmp
+    return a.id.localeCompare(b.id)
   })
 
   const totalPeso = itens
@@ -347,6 +349,7 @@ export default function RomaneioDetail() {
 
   const handleDeleteRomaneio = async () => {
     try {
+      await deleteItensByRomaneio(romaneio.id)
       await deleteRomaneio(romaneio.id)
       toast.success('Romaneio excluído')
       navigate(`/rotas/${encodeURIComponent(romaneio.rota)}`)

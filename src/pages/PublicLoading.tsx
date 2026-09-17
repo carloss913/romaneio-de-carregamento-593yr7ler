@@ -71,17 +71,15 @@ export default function PublicLoading() {
   const loadData = async () => {
     if (!id) return
     try {
-      const rom = await getRomaneio(id)
+      const [rom, listItens, config] = await Promise.all([
+        getRomaneio(id),
+        getRomaneioItens(id),
+        getConfiguracoes().catch(() => null),
+      ])
       setRomaneio(rom)
       setObsText(rom.observacoes || '')
-      const listItens = await getRomaneioItens(id)
       setItens(listItens)
-      try {
-        const config = await getConfiguracoes()
-        setConfigPhone(config?.telefone_contato || config?.telefone_whatsapp || '')
-      } catch {
-        /* no config */
-      }
+      setConfigPhone(config?.telefone_contato || config?.telefone_whatsapp || '')
     } catch (err: any) {
       if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
         setRomaneio(null)

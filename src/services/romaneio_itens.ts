@@ -36,16 +36,21 @@ export const deleteRomaneioItem = (id: string) => pb.collection('romaneio_itens'
 
 export const deleteItensByRomaneio = async (romaneioId: string) => {
   const itens = await getRomaneioItens(romaneioId)
-  // Deletar sequencialmente com delay para evitar 429
-  for (let i = 0; i < itens.length; i++) {
-    try {
-      await deleteRomaneioItem(itens[i].id)
-    } catch (err) {
-      console.error(`Erro ao deletar item ${itens[i].id}:`, err)
-    }
-    if (i < itens.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 150))
-    }
+  if (itens.length === 0) return
+
+  // Deletar em pequenos lotes com concorrência controlada
+  const BATCH_SIZE = 5
+  for (let i = 0; i < itens.length; i += BATCH_SIZE) {
+    const batch = itens.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (item) => {
+        try {
+          await deleteRomaneioItem(item.id)
+        } catch (err) {
+          console.error(`Erro ao deletar item ${item.id}:`, err)
+        }
+      }),
+    )
   }
 }
 
@@ -53,9 +58,15 @@ export const refreshRomaneioItens = async (
   itens: RomaneioItem[],
   produtos: Produto[],
 ): Promise<number> => {
-  let updatedCount = 0
+  const produtoMap = new Map<string, Produto>()
+  for (const p of produtos) {
+    produtoMap.set(p.id, p)
+  }
+
+  const itemsToUpdate: { id: string; caixas: number; pecas: number }[] = []
+
   for (const item of itens) {
-    const produto = produtos.find((p) => p.id === item.produto)
+    const produto = produtoMap.get(item.produto)
     if (!produto) continue
 
     let needsUpdate = false
@@ -95,12 +106,37 @@ export const refreshRomaneioItens = async (
     }
 
     if (needsUpdate) {
-      await updateRomaneioItem(item.id, {
+      itemsToUpdate.push({
+        id: item.id,
         caixas: newCaixas,
         pecas: newPecas,
       })
-      updatedCount++
     }
   }
+
+  if (itemsToUpdate.length === 0) {
+    return 0
+  }
+
+  // Executa os updates necessários em paralelo com controle de concorrência
+  let updatedCount = 0
+  const BATCH_SIZE = 5
+  for (let i = 0; i < itemsToUpdate.length; i += BATCH_SIZE) {
+    const batch = itemsToUpdate.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (u) => {
+        try {
+          await updateRomaneioItem(u.id, {
+            caixas: u.caixas,
+            pecas: u.pecas,
+          })
+          updatedCount++
+        } catch (err) {
+          console.error(`Erro ao atualizar item ${u.id}:`, err)
+        }
+      }),
+    )
+  }
+
   return updatedCount
 }
