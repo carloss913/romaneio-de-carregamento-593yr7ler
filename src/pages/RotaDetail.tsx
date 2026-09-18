@@ -28,6 +28,7 @@ export default function RotaDetail() {
   const [itens, setItens] = useState<RomaneioItem[]>([])
   const [novoModalOpen, setNovoModalOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id?: string }>({ open: false })
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const realtimeDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -102,15 +103,21 @@ export default function RotaDetail() {
   useRealtime('romaneio_itens', debouncedLoadData)
 
   const handleDelete = async () => {
-    if (!deleteDialog.id) return
+    const idToDelete = deleteDialog.id
+    if (!idToDelete || isDeleting) return
+    setIsDeleting(true)
     try {
-      await deleteItensByRomaneio(deleteDialog.id)
-      await deleteRomaneio(deleteDialog.id)
+      // Exclui itens associados com controle de retries e backoff
+      await deleteItensByRomaneio(idToDelete)
+      await deleteRomaneio(idToDelete)
       toast.success('Romaneio excluído')
-      setDeleteDialog({ open: false })
-      loadData()
+      setDeleteDialog({ open: false, id: undefined })
+      await loadData()
     } catch (err) {
+      console.error('Erro ao excluir romaneio:', err)
       toast.error('Erro ao excluir romaneio')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -266,11 +273,15 @@ export default function RotaDetail() {
             Esta ação é irreversível e excluirá todos os itens vinculados a este romaneio.
           </p>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteDialog({ open: false })}>
+            <Button
+              variant="outline"
+              disabled={isDeleting}
+              onClick={() => setDeleteDialog({ open: false, id: undefined })}
+            >
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Excluir Agora
+            <Button variant="destructive" disabled={isDeleting} onClick={handleDelete}>
+              {isDeleting ? 'Excluindo...' : 'Excluir Agora'}
             </Button>
           </DialogFooter>
         </DialogContent>

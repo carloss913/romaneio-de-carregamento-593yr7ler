@@ -56,4 +56,23 @@ export const updateRomaneio = (
   return pb.collection('romaneios').update<Romaneio>(id, formData)
 }
 
-export const deleteRomaneio = (id: string) => pb.collection('romaneios').delete(id)
+export const deleteRomaneio = async (id: string, maxRetries = 3): Promise<boolean> => {
+  let attempt = 0
+  while (attempt < maxRetries) {
+    try {
+      return await pb.collection('romaneios').delete(id)
+    } catch (err: any) {
+      attempt++
+      if (err?.status === 404 || err?.response?.code === 404) {
+        return true // já foi excluído
+      }
+      if (attempt < maxRetries) {
+        const delay = (err?.status === 429 ? 400 : 200) * attempt
+        await new Promise((r) => setTimeout(r, delay))
+        continue
+      }
+      throw err
+    }
+  }
+  return false
+}

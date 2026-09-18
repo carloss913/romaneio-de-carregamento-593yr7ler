@@ -266,36 +266,50 @@ export function ImportWizardModal({
     try {
       const aggregated: Record<
         string,
-        { rawCode: string; pesoTotal: number; marca: string; nome: string; secao: string }
+        {
+          rawCode: string
+          pesoTotal: number
+          marca: string
+          nome: string
+          secao: string
+          occurrences: number
+        }
       > = {}
 
       parsedData.rows.forEach((row) => {
-        const code = (row[colProduto] || '').trim()
+        const rawCodeVal = (row[colProduto] || '').trim()
         const weightRaw = row[colPeso] || ''
-        if (!code) return
+        if (!rawCodeVal) return
         const weight = parseBrazilianWeight(weightRaw)
         const marcaVal = colMarca ? (row[colMarca] || '').trim() : ''
         const nomeVal = colNome ? (row[colNome] || '').trim() : ''
         const rawSecao = colSecao ? (row[colSecao] || '').trim() : ''
         const secaoVal = normalizeSecao(rawSecao) || rawSecao
-        if (aggregated[code]) {
-          aggregated[code].pesoTotal += weight
-          if (marcaVal && !aggregated[code].marca) {
-            aggregated[code].marca = marcaVal
+
+        // Normalização da chave: produtos do tipo "00123" e "123" ou com espaços não devem se duplicar na planilha
+        const key = rawCodeVal
+
+        if (aggregated[key]) {
+          // Soma com arredondamento preciso para 3 casas decimais
+          aggregated[key].pesoTotal = Math.round((aggregated[key].pesoTotal + weight) * 1000) / 1000
+          aggregated[key].occurrences += 1
+          if (marcaVal && !aggregated[key].marca) {
+            aggregated[key].marca = marcaVal
           }
-          if (nomeVal && !aggregated[code].nome) {
-            aggregated[code].nome = nomeVal
+          if (nomeVal && !aggregated[key].nome) {
+            aggregated[key].nome = nomeVal
           }
-          if (secaoVal && (!aggregated[code].secao || !normalizeSecao(aggregated[code].secao))) {
-            aggregated[code].secao = secaoVal
+          if (secaoVal && (!aggregated[key].secao || !normalizeSecao(aggregated[key].secao))) {
+            aggregated[key].secao = secaoVal
           }
         } else {
-          aggregated[code] = {
-            rawCode: code,
+          aggregated[key] = {
+            rawCode: rawCodeVal,
             pesoTotal: weight,
             marca: marcaVal,
             nome: nomeVal,
             secao: secaoVal,
+            occurrences: 1,
           }
         }
       })
@@ -344,10 +358,13 @@ export function ImportWizardModal({
   }
 
   const setRowProduto = (rowId: string, produto: Produto) => {
-    setProcessedRows((prev) =>
-      prev.map((row) => {
-        // Se a linha tiver o mesmo rowId OU o mesmo código rawCode (caso haja duplicidade/mesmo produto)
-        if (row.id === rowId || (produto.codigo && row.rawCode === produto.codigo)) {
+    setProcessedRows((prev) => {
+      const targetRow = prev.find((r) => r.id === rowId)
+      const targetCode = (targetRow?.rawCode || produto.codigo || '').trim()
+
+      return prev.map((row) => {
+        // Se a linha tiver o mesmo rowId OU o mesmo código do produto
+        if (row.id === rowId || (targetCode && row.rawCode.trim() === targetCode)) {
           const updated = applyConversion(
             {
               ...row,
@@ -365,8 +382,8 @@ export function ImportWizardModal({
           }
         }
         return row
-      }),
-    )
+      })
+    })
   }
 
   const handleOpenEditModal = (row: ProcessedRow) => {
@@ -427,6 +444,7 @@ export function ImportWizardModal({
             pesoKg: newWeight,
             weightInputStr: rawInput,
             matchStatus: 'auto_cadastrar' as const,
+            weightWarning: false,
             textoFormatado: `${formatWeight(newWeight)} kg`,
             isManuallyFixed: true,
           }
@@ -451,8 +469,8 @@ export function ImportWizardModal({
     setProcessedRows((prev) => prev.filter((row) => row.matchStatus !== 'peso_invalido'))
   }
 
-  // Executa uma operação com retry individual e backoff adaptativo curto/progressivo
-  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 4): Promise<T> => {
+  // Executa uma operação com retry individual e backoff adaptativo progressivo
+  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 6): Promise<T> => {
     let attempt = 0
     while (attempt < maxRetries) {
       try {
@@ -467,10 +485,9 @@ export function ImportWizardModal({
             (err as any).status === 429)
 
         if (attempt < maxRetries) {
-          // Backoff adaptativo curto e progressivo: se 429 (rate limit), espera 400ms, 800ms, 1600ms com leve jitter;
-          // para outros erros de rede transitórios, espera 300ms, 600ms, 900ms.
-          const baseDelay = is429 ? 400 * Math.pow(2, attempt - 1) : 300 * attempt
-          const jitter = Math.floor(Math.random() * 100)
+          // Backoff adaptativo progressivo: se 429 (rate limit), espera 400ms, 800ms, 1500ms, 2500ms, 4000ms com jitter
+          const baseDelay = is429 ? Math.min(400 * Math.pow(1.8, attempt - 1), 4000) : 300 * attempt
+          const jitter = Math.floor(Math.random() * 120)
           await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter))
           continue
         }
@@ -530,6 +547,33 @@ export function ImportWizardModal({
     const workerCount = Math.min(Math.max(concurrency, 1), items.length)
     const workers = Array.from({ length: workerCount }, () => runWorker())
     await Promise.all(workers)
+
+    return results
+  }
+
+  // Executa uma lista de operações sequencialmente (sem concorrência entre si)
+  // Utilizado para operações de soma no mesmo registro do PocketBase para evitar race conditions
+  const processSequentially = async <T, R>(
+    items: T[],
+    task: (item: T) => Promise<R>,
+    onItemCompleted?: (completedCount: number, total: number) => void,
+  ): Promise<PromiseSettledResult<R>[]> => {
+    if (items.length === 0) return []
+
+    const results: PromiseSettledResult<R>[] = []
+    let completedCount = 0
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      try {
+        const res = await task(item)
+        results.push({ status: 'fulfilled', value: res })
+      } catch (err: unknown) {
+        results.push({ status: 'rejected', reason: err })
+      }
+      completedCount++
+      onItemCompleted?.(completedCount, items.length)
+    }
 
     return results
   }
@@ -685,9 +729,10 @@ export function ImportWizardModal({
         pecas: number
         observacao?: string
         isUpdate: boolean
-        existingItem?: RomaneioItem
+        existingItemId?: string
         newTotalPesoKg?: number
         newObsAcrescimo?: string
+        targetCode: string
       }
 
       // Montar mapa dos itens já existentes no romaneio indexados por código do produto (trimmed)
@@ -705,6 +750,17 @@ export function ImportWizardModal({
       const now = new Date()
       const diaMes = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`
 
+      // Mapa temporário para rastrear peso cumulativo e observação cumulativa
+      // caso múltiplas linhas da planilha façam referência ao mesmo produto existente
+      const runningStateMap = new Map<
+        string,
+        {
+          existingItemId: string
+          currentTotalPesoKg: number
+          currentObsAcrescimo: string
+        }
+      >()
+
       const operationsToExecute: ItemOperation[] = []
 
       for (const row of valid) {
@@ -715,18 +771,32 @@ export function ImportWizardModal({
           const existing = existingByCode.get(rowCode)
 
           if (existing) {
-            // Item repetido! Somar peso e recalcular
+            // Item repetido! Somar peso cumulativo no mesmo item existente
+            let runningState = runningStateMap.get(rowCode)
+            if (!runningState) {
+              runningState = {
+                existingItemId: existing.id,
+                currentTotalPesoKg: existing.peso_total_kg || 0,
+                currentObsAcrescimo: existing.obs_acrescimo || '',
+              }
+              runningStateMap.set(rowCode, runningState)
+            }
+
             const somadoPesoKg =
-              Math.round(((existing.peso_total_kg || 0) + finalPeso) * 1000) / 1000
+              Math.round((runningState.currentTotalPesoKg + finalPeso) * 1000) / 1000
             const conv = applyConversion(row, row.matchedProduto, somadoPesoKg)
 
             const formattedAdded = formatWeight(finalPeso)
             const unidadeSufixo = isNonKgProduto(row.matchedProduto.unidade_medida) ? 'un' : 'kg'
             const newNota = `Importação somada: +${formattedAdded} ${unidadeSufixo} (planilha de ${diaMes})`
             const combinedObsAcrescimo =
-              existing.obs_acrescimo && existing.obs_acrescimo.trim()
-                ? `${existing.obs_acrescimo.trim()} | ${newNota}`
+              runningState.currentObsAcrescimo && runningState.currentObsAcrescimo.trim()
+                ? `${runningState.currentObsAcrescimo.trim()} | ${newNota}`
                 : newNota
+
+            // Atualiza o runningState para a próxima ocorrência (se houver)
+            runningState.currentTotalPesoKg = somadoPesoKg
+            runningState.currentObsAcrescimo = combinedObsAcrescimo
 
             operationsToExecute.push({
               row,
@@ -736,9 +806,10 @@ export function ImportWizardModal({
               caixas: conv.caixas,
               pecas: conv.pecas,
               isUpdate: true,
-              existingItem: existing,
+              existingItemId: existing.id,
               newTotalPesoKg: somadoPesoKg,
               newObsAcrescimo: combinedObsAcrescimo,
+              targetCode: rowCode,
             })
           } else {
             operationsToExecute.push({
@@ -750,6 +821,7 @@ export function ImportWizardModal({
               pecas: row.pecas,
               observacao: needsConferirPeso ? 'conferir peso' : undefined,
               isUpdate: false,
+              targetCode: rowCode,
             })
           }
         }
@@ -769,6 +841,7 @@ export function ImportWizardModal({
             pecas: 0,
             observacao: needsConferirPeso ? 'conferir peso' : undefined,
             isUpdate: false,
+            targetCode: (novoProduto.codigo || row.rawCode || '').trim(),
           })
         } else {
           // Se o produto falhou no auto-cadastro, não tenta criar o item no romaneio
@@ -782,45 +855,81 @@ export function ImportWizardModal({
         message: `Gravando itens no romaneio (0 de ${operationsToExecute.length})...`,
       })
 
-      const itemResults = await processInParallel(
-        operationsToExecute,
-        CONCURRENCY,
-        async (op) => {
-          if (op.isUpdate && op.existingItem) {
+      // Separar as operações:
+      // - updates (somas em itens existentes): agrupadas por targetCode e executadas sequencialmente
+      //   para garantir que não haja race condition na soma do mesmo registro.
+      // - inserts (novos itens no romaneio): executados em paralelo com CONCURRENCY (3-4 workers simultâneos).
+      const updateOperations = operationsToExecute.filter((op) => op.isUpdate)
+      const insertOperations = operationsToExecute.filter((op) => !op.isUpdate)
+
+      let completedOperations = 0
+      const updateResults: { op: ItemOperation; result: PromiseSettledResult<any> }[] = []
+      const insertResults: { op: ItemOperation; result: PromiseSettledResult<any> }[] = []
+
+      // 3a. Executar updates de soma de forma serializada por segurança de concorrência
+      if (updateOperations.length > 0) {
+        const resList = await processSequentially(
+          updateOperations,
+          async (op) => {
             return executeWithRetry(() =>
-              updateRomaneioItem(op.existingItem!.id, {
+              updateRomaneioItem(op.existingItemId!, {
                 peso_total_kg: op.newTotalPesoKg!,
                 caixas: op.caixas,
                 pecas: op.pecas,
                 obs_acrescimo: op.newObsAcrescimo!,
               }),
             )
-          }
+          },
+          () => {
+            completedOperations++
+            const overallDone = Math.min(toAutoCreate.length + completedOperations, totalOperations)
+            setImportProgress({
+              current: overallDone,
+              total: totalOperations,
+              message: `Gravando... ${completedOperations} de ${operationsToExecute.length} gravados`,
+            })
+          },
+        )
+        resList.forEach((r, idx) => {
+          updateResults.push({ op: updateOperations[idx], result: r })
+        })
+      }
 
-          return executeWithRetry(() =>
-            createRomaneioItem({
-              romaneio: romaneioId,
-              produto: op.produtoId,
-              peso_total_kg: op.pesoKg,
-              caixas: op.caixas,
-              pecas: op.pecas,
-              ...(op.observacao ? { observacao: op.observacao } : {}),
-            }),
-          )
-        },
-        (completed) => {
-          const overallDone = Math.min(toAutoCreate.length + completed, totalOperations)
-          setImportProgress({
-            current: overallDone,
-            total: totalOperations,
-            message: `Gravando... ${completed} de ${operationsToExecute.length} gravados`,
-          })
-        },
-      )
+      // 3b. Executar inserts em paralelo real (concorrência controlada com retry)
+      if (insertOperations.length > 0) {
+        const resList = await processInParallel(
+          insertOperations,
+          CONCURRENCY,
+          async (op) => {
+            return executeWithRetry(() =>
+              createRomaneioItem({
+                romaneio: romaneioId,
+                produto: op.produtoId,
+                peso_total_kg: op.pesoKg,
+                caixas: op.caixas,
+                pecas: op.pecas,
+                ...(op.observacao ? { observacao: op.observacao } : {}),
+              }),
+            )
+          },
+          () => {
+            completedOperations++
+            const overallDone = Math.min(toAutoCreate.length + completedOperations, totalOperations)
+            setImportProgress({
+              current: overallDone,
+              total: totalOperations,
+              message: `Gravando... ${completedOperations} de ${operationsToExecute.length} gravados`,
+            })
+          },
+        )
+        resList.forEach((r, idx) => {
+          insertResults.push({ op: insertOperations[idx], result: r })
+        })
+      }
 
-      // Computar totais
-      itemResults.forEach((res, index) => {
-        const op = operationsToExecute[index]
+      // Computar totais de todas as operações executadas
+      const allFinishedResults = [...updateResults, ...insertResults]
+      allFinishedResults.forEach(({ op, result: res }) => {
         if (res.status === 'fulfilled') {
           totalImported++
           totalCaixas += op.caixas
@@ -845,20 +954,23 @@ export function ImportWizardModal({
       // Verificação de integridade final: conferir quantos itens foram efetivamente gravados e informar
       const totalEsperado = operationsToExecute.length
       if (totalFailures > 0) {
+        const failSummary = errorsList.length > 0 ? ` (${errorsList.slice(0, 3).join('; ')})` : ''
         toast({
           title: totalImported > 0 ? 'Importação parcial concluída' : 'Falha na importação',
-          description: `${totalImported} de ${totalEsperado} gravados (${totalFailures} falha(s)).`,
-          variant: totalImported > 0 ? 'default' : 'destructive',
+          description: `${totalImported} de ${totalEsperado} gravados (${totalFailures} falha(s))${failSummary}.`,
+          variant: 'destructive',
         })
       } else {
         toast({
           title: 'Importação concluída com sucesso!',
-          description: `${totalImported} de ${totalEsperado} gravados (${totalCaixas} cx • ${totalPecas} pct • ${toAutoCreate.length} auto-cadastrados).`,
+          description: `${totalImported} de ${totalEsperado} gravados (${totalCaixas} cx • ${totalPecas} pct${toAutoCreate.length > 0 ? ` • ${toAutoCreate.length} novos produtos cadastrados` : ''}).`,
         })
       }
 
       if (totalImported > 0) {
         onImportComplete()
+      }
+      if (totalFailures === 0) {
         onOpenChange(false)
         resetWizard()
       }

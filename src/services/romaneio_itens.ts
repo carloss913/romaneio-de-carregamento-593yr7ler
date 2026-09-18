@@ -32,14 +32,40 @@ export const updateRomaneioItem = (
   }>,
 ) => pb.collection('romaneio_itens').update<RomaneioItem>(id, data)
 
-export const deleteRomaneioItem = (id: string) => pb.collection('romaneio_itens').delete(id)
+export const deleteRomaneioItem = async (id: string, maxRetries = 3): Promise<boolean> => {
+  let attempt = 0
+  while (attempt < maxRetries) {
+    try {
+      return await pb.collection('romaneio_itens').delete(id)
+    } catch (err: any) {
+      attempt++
+      if (err?.status === 404 || err?.response?.code === 404) {
+        return true // já foi excluído (ex: cascadeDelete)
+      }
+      if (attempt < maxRetries) {
+        const delay = (err?.status === 429 ? 400 : 200) * attempt
+        await new Promise((r) => setTimeout(r, delay))
+        continue
+      }
+      throw err
+    }
+  }
+  return false
+}
 
 export const deleteItensByRomaneio = async (romaneioId: string) => {
-  const itens = await getRomaneioItens(romaneioId)
-  if (itens.length === 0) return
+  let itens: RomaneioItem[] = []
+  try {
+    itens = await getRomaneioItens(romaneioId)
+  } catch (err: any) {
+    if (err?.status === 404 || err?.response?.code === 404) return
+    console.warn(`Erro ao listar itens para exclusão do romaneio ${romaneioId}:`, err)
+    return
+  }
+  if (!itens || itens.length === 0) return
 
-  // Deletar em pequenos lotes com concorrência controlada
-  const BATCH_SIZE = 5
+  // Deletar com pequenos lotes e pausas para evitar 429 Rate Limit
+  const BATCH_SIZE = 3
   for (let i = 0; i < itens.length; i += BATCH_SIZE) {
     const batch = itens.slice(i, i + BATCH_SIZE)
     await Promise.all(
@@ -51,6 +77,9 @@ export const deleteItensByRomaneio = async (romaneioId: string) => {
         }
       }),
     )
+    if (i + BATCH_SIZE < itens.length) {
+      await new Promise((r) => setTimeout(r, 80))
+    }
   }
 }
 
