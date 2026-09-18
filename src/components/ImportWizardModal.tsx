@@ -38,6 +38,8 @@ import {
   AlertCircle,
   Loader2,
   Edit2,
+  RotateCw,
+  ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Produto, RomaneioItem, normalizeSecao } from '@/types/database'
@@ -125,7 +127,32 @@ export function ImportWizardModal({
     current: number
     total: number
     message: string
+    activeConcurrency?: number
+    rateLimitedCount?: number
   } | null>(null)
+  const [failedOperations, setFailedOperations] = useState<
+    {
+      type: 'auto_create' | 'item_operation'
+      identifier: string
+      reason: string
+      row: ProcessedRow
+      // Dados para retry de criação de item
+      itemOp?: {
+        produtoId: string
+        produtoObj: Produto
+        pesoKg: number
+        caixas: number
+        pecas: number
+        observacao?: string
+        isUpdate: boolean
+        existingItemId?: string
+        newTotalPesoKg?: number
+        newObsAcrescimo?: string
+        targetCode: string
+      }
+    }[]
+  >([])
+  const [retryingFailed, setRetryingFailed] = useState(false)
   const [weightAcknowledged, setWeightAcknowledged] = useState(false)
   const [produtoModalState, setProdutoModalState] = useState<{
     open: boolean
@@ -162,6 +189,8 @@ export function ImportWizardModal({
     setProcessedRows([])
     setWeightAcknowledged(false)
     setImportProgress(null)
+    setFailedOperations([])
+    setRetryingFailed(false)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -469,83 +498,165 @@ export function ImportWizardModal({
     setProcessedRows((prev) => prev.filter((row) => row.matchStatus !== 'peso_invalido'))
   }
 
-  // Executa uma operação com retry individual e backoff adaptativo progressivo
-  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 6): Promise<T> => {
+  // Helpers para inspeção de erros HTTP / PocketBase
+  const isTooManyRequests = (err: unknown): boolean => {
+    if (err instanceof ClientResponseError && err.status === 429) return true
+    if (typeof err === 'object' && err !== null && 'status' in err) {
+      return (err as { status: unknown }).status === 429
+    }
+    return false
+  }
+
+  const isPermanentClientError = (err: unknown): boolean => {
+    // Erros 400 (validação/dados errados), 403 (permissão negada) ou 404 (não encontrado)
+    // são definitivos e não melhoram com retry persistente.
+    // Qualquer outro status (429, 500, 502, 503, 504, 0/network timeout) é transitório.
+    let status = 0
+    if (err instanceof ClientResponseError) {
+      status = err.status
+    } else if (typeof err === 'object' && err !== null && 'status' in err) {
+      status = Number((err as { status: unknown }).status) || 0
+    }
+    return status === 400 || status === 403 || status === 404
+  }
+
+  // Executa uma operação com retry PERSISTENTE:
+  // Se receber 429 ou erro de rede transitório, nunca desiste após poucas tentativas (até 35 tentativas com backoff progressivo + jitter).
+  // Apenas erros definitivos do cliente (400 validação, 403, 404) abortam de imediato.
+  const executeWithRetry = async <T,>(
+    operation: () => Promise<T>,
+    onTransientWait?: (attempt: number, delayMs: number) => void,
+    maxRetries = 35,
+  ): Promise<T> => {
     let attempt = 0
     while (attempt < maxRetries) {
       try {
         return await operation()
       } catch (err: unknown) {
         attempt++
-        const is429 =
-          (err instanceof ClientResponseError && err.status === 429) ||
-          (typeof err === 'object' &&
-            err !== null &&
-            'status' in err &&
-            (err as any).status === 429)
+        const rateLimited = isTooManyRequests(err)
+        const permanent = isPermanentClientError(err)
 
-        if (attempt < maxRetries) {
-          // Backoff adaptativo progressivo: se 429 (rate limit), espera 400ms, 800ms, 1500ms, 2500ms, 4000ms com jitter
-          const baseDelay = is429 ? Math.min(400 * Math.pow(1.8, attempt - 1), 4000) : 300 * attempt
-          const jitter = Math.floor(Math.random() * 120)
-          await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter))
-          continue
+        if (permanent) {
+          console.warn(`[ImportWizard] Erro definitivo detectado (não transitório):`, err)
+          throw err
         }
-        throw err
+
+        if (attempt >= maxRetries) {
+          console.error(
+            `[ImportWizard] Limite máximo de retries atingido (${maxRetries} tentativas):`,
+            err,
+          )
+          throw err
+        }
+
+        // Backoff exponencial adaptativo com jitter
+        // Para 429: começa em 400ms e sobe até ~3500ms por tentativa, mantendo retries persistentes
+        let baseDelay: number
+        if (rateLimited) {
+          baseDelay = Math.min(400 * Math.pow(1.35, Math.min(attempt - 1, 8)), 3500)
+        } else {
+          // Outros erros transitórios (ex: timeout, 502, falha temporária de conexão)
+          baseDelay = Math.min(300 * attempt, 3000)
+        }
+        const jitter = Math.floor(Math.random() * 200)
+        const delay = Math.round(baseDelay + jitter)
+
+        onTransientWait?.(attempt, delay)
+        await new Promise((resolve) => setTimeout(resolve, delay))
       }
     }
-    throw new Error('Número máximo de tentativas atingido.')
+    throw new Error('Falha após múltiplas tentativas de retry.')
   }
 
-  // Executa uma lista de tarefas com paralelismo real (concorrência de 3-4 requisições simultâneas)
-  // Cada item executa como requisição individual ao PocketBase com seu próprio retry independente.
-  // Sem delay artificial/cego entre itens. Em caso de 429 persistente, aplica cooling adaptativo.
-  const processInParallel = async <T, R>(
+  // Gerenciador de concorrência adaptativa com AIMD (Additive Increase / Multiplicative Decrease):
+  // Começa com concorrência segura (ex: 2). Se ocorrer 429, reduz imediatamente para 1 worker e impõe cooling global.
+  // Quando ocorrem sucessos seguidos, incrementa gradualmente até o teto (ex: 3-4).
+  const processWithAdaptiveConcurrency = async <T, R>(
     items: T[],
-    concurrency: number,
-    task: (item: T) => Promise<R>,
-    onItemCompleted?: (completedCount: number, total: number) => void,
-  ): Promise<PromiseSettledResult<R>[]> => {
+    task: (item: T, workerId: number) => Promise<R>,
+    options?: {
+      initialConcurrency?: number
+      minConcurrency?: number
+      maxConcurrency?: number
+      coolingOn429Ms?: number
+      onItemCompleted?: (completedCount: number, total: number, activeConcurrency: number) => void
+      onRateLimitHit?: (activeConcurrency: number, delayMs: number) => void
+    },
+  ): Promise<{ item: T; result: PromiseSettledResult<R> }[]> => {
     if (items.length === 0) return []
 
-    const results: PromiseSettledResult<R>[] = new Array(items.length)
+    const minC = options?.minConcurrency ?? 1
+    const maxC = options?.maxConcurrency ?? 3
+    const initialC = Math.min(Math.max(options?.initialConcurrency ?? 2, minC), maxC)
+    const coolingMs = options?.coolingOn429Ms ?? 750
+
+    let currentConcurrency = initialC
+    let consecutiveSuccesses = 0
+    let pauseUntil = 0
+
+    const results: { item: T; result: PromiseSettledResult<R> }[] = new Array(items.length)
     let nextIndex = 0
     let completedCount = 0
 
-    const runWorker = async () => {
-      while (nextIndex < items.length) {
-        const currentIndex = nextIndex++
-        const item = items[currentIndex]
+    // Aguardar cooling global se algum worker disparou 429
+    const waitIfCooling = async () => {
+      const now = Date.now()
+      if (pauseUntil > now) {
+        await new Promise((r) => setTimeout(r, pauseUntil - now))
+      }
+    }
 
-        let had429 = false
-        try {
-          const res = await task(item)
-          results[currentIndex] = { status: 'fulfilled', value: res }
-        } catch (err: unknown) {
-          const is429 =
-            (err instanceof ClientResponseError && err.status === 429) ||
-            (typeof err === 'object' &&
-              err !== null &&
-              'status' in err &&
-              (err as any).status === 429)
-          if (is429) {
-            had429 = true
-          }
-          results[currentIndex] = { status: 'rejected', reason: err }
+    const runWorker = async (workerId: number) => {
+      while (true) {
+        // Se a concorrência adaptativa foi reduzida abaixo do ID deste worker, ele suspende
+        if (workerId > currentConcurrency) {
+          await new Promise((r) => setTimeout(r, 120))
+          continue
         }
 
-        completedCount++
-        onItemCompleted?.(completedCount, items.length)
+        await waitIfCooling()
 
-        // Cooling adaptativo caso o servidor ainda responda 429 após retries individuais
-        if (had429) {
-          await new Promise((resolve) => setTimeout(resolve, 800))
+        let currentIndex: number
+        {
+          if (nextIndex >= items.length) {
+            return
+          }
+          currentIndex = nextIndex++
+        }
+
+        const item = items[currentIndex]
+        try {
+          const value = await task(item, workerId)
+          results[currentIndex] = { item, result: { status: 'fulfilled', value } }
+
+          // Sucesso: AIMD progressivo
+          consecutiveSuccesses++
+          if (consecutiveSuccesses >= 8 && currentConcurrency < maxC) {
+            currentConcurrency = Math.min(currentConcurrency + 1, maxC)
+            consecutiveSuccesses = 0
+          }
+        } catch (err: unknown) {
+          results[currentIndex] = { item, result: { status: 'rejected', reason: err } }
+
+          if (isTooManyRequests(err)) {
+            // Disparou 429: Multiplicative Decrease
+            currentConcurrency = Math.max(minC, Math.floor(currentConcurrency / 2))
+            consecutiveSuccesses = 0
+            const now = Date.now()
+            pauseUntil = Math.max(pauseUntil, now + coolingMs)
+            options?.onRateLimitHit?.(currentConcurrency, coolingMs)
+            await new Promise((r) => setTimeout(r, coolingMs))
+          }
+        } finally {
+          completedCount++
+          options?.onItemCompleted?.(completedCount, items.length, currentConcurrency)
         }
       }
     }
 
-    const workerCount = Math.min(Math.max(concurrency, 1), items.length)
-    const workers = Array.from({ length: workerCount }, () => runWorker())
+    // Criar workers até o teto máximo permitido
+    const workers = Array.from({ length: Math.min(maxC, items.length) }, (_, i) => runWorker(i + 1))
     await Promise.all(workers)
 
     return results
@@ -557,19 +668,19 @@ export function ImportWizardModal({
     items: T[],
     task: (item: T) => Promise<R>,
     onItemCompleted?: (completedCount: number, total: number) => void,
-  ): Promise<PromiseSettledResult<R>[]> => {
+  ): Promise<{ item: T; result: PromiseSettledResult<R> }[]> => {
     if (items.length === 0) return []
 
-    const results: PromiseSettledResult<R>[] = []
+    const results: { item: T; result: PromiseSettledResult<R> }[] = []
     let completedCount = 0
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       try {
         const res = await task(item)
-        results.push({ status: 'fulfilled', value: res })
+        results.push({ item, result: { status: 'fulfilled', value: res } })
       } catch (err: unknown) {
-        results.push({ status: 'rejected', reason: err })
+        results.push({ item, result: { status: 'rejected', reason: err } })
       }
       completedCount++
       onItemCompleted?.(completedCount, items.length)
@@ -620,32 +731,32 @@ export function ImportWizardModal({
       message: 'Iniciando importação...',
     })
 
-    // Paralelismo real: 3 a 4 requisições simultâneas sem delay cego
-    const CONCURRENCY = 4
-
     try {
       let totalCaixas = 0
       let totalPecas = 0
       let totalImported = 0
       let totalFailures = 0
       const errorsList: string[] = []
+      let rateLimitedHits = 0
+      const newFailures: typeof failedOperations = []
 
-      // 1. Processar auto-cadastros de produtos primeiro (em paralelo 3-4 simultâneos)
+      // 1. Processar auto-cadastros de produtos primeiro com concorrência adaptativa
       const autoCreatedMap = new Map<string, Produto>()
       if (toAutoCreate.length > 0) {
         setImportProgress({
           current: 0,
           total: totalOperations,
           message: `Cadastrando ${toAutoCreate.length} novo(s) produto(s)...`,
+          activeConcurrency: 2,
+          rateLimitedCount: 0,
         })
 
-        await processInParallel(
+        const autoCreateResults = await processWithAdaptiveConcurrency(
           toAutoCreate,
-          CONCURRENCY,
           async (row) => {
-            try {
-              const normSecao = normalizeSecao(row.secao)
-              const novoProduto = await executeWithRetry(() =>
+            const normSecao = normalizeSecao(row.secao)
+            const novoProduto = await executeWithRetry(
+              () =>
                 createProduto({
                   codigo: row.rawCode,
                   nome: row.nomeFromSheet || row.rawCode,
@@ -653,33 +764,69 @@ export function ImportWizardModal({
                   secao: normSecao,
                   ativo: true,
                 }),
-              )
-              autoCreatedMap.set(row.id, novoProduto)
-              return novoProduto
-            } catch (err: unknown) {
-              const prodIdentifier = row.rawCode || row.nomeFromSheet || 'Desconhecido'
-              const errorReason = getErrorMessage(err)
-              console.error(`Erro ao auto-cadastrar produto [${prodIdentifier}]:`, err)
-              errorsList.push(`Produto [${prodIdentifier}]: ${errorReason}`)
-              toast({
-                title: `Falha ao cadastrar produto [${prodIdentifier}]`,
-                description: errorReason,
-                variant: 'destructive',
-              })
-              throw err
-            }
+              (attempt, delayMs) => {
+                rateLimitedHits++
+                setImportProgress((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        rateLimitedCount: rateLimitedHits,
+                        message: `Cadastrando novo produto [${row.rawCode}] (cooling ${delayMs}ms, tentativa ${attempt})...`,
+                      }
+                    : null,
+                )
+              },
+            )
+            autoCreatedMap.set(row.id, novoProduto)
+            return novoProduto
           },
-          (completed) => {
-            setImportProgress({
-              current: completed,
-              total: totalOperations,
-              message: `Cadastrando novos produtos (${completed} de ${toAutoCreate.length})...`,
-            })
+          {
+            initialConcurrency: 2,
+            minConcurrency: 1,
+            maxConcurrency: 3,
+            coolingOn429Ms: 700,
+            onItemCompleted: (completed, total, conc) => {
+              setImportProgress({
+                current: completed,
+                total: totalOperations,
+                message: `Cadastrando novos produtos (${completed} de ${toAutoCreate.length})...`,
+                activeConcurrency: conc,
+                rateLimitedCount: rateLimitedHits,
+              })
+            },
+            onRateLimitHit: (conc, delay) => {
+              rateLimitedHits++
+              setImportProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      activeConcurrency: conc,
+                      rateLimitedCount: rateLimitedHits,
+                      message: `Ajustando fluxo para ${conc} requisição(ões) simultânea(s) devido a limite do servidor...`,
+                    }
+                  : null,
+              )
+            },
           },
         )
+
+        autoCreateResults.forEach(({ item: row, result: r }) => {
+          if (r.status === 'rejected') {
+            const prodIdentifier = row.rawCode || row.nomeFromSheet || 'Desconhecido'
+            const errorReason = getErrorMessage(r.reason)
+            console.error(`Erro ao auto-cadastrar produto [${prodIdentifier}]:`, r.reason)
+            errorsList.push(`Produto [${prodIdentifier}]: ${errorReason}`)
+            newFailures.push({
+              type: 'auto_create',
+              identifier: prodIdentifier,
+              reason: errorReason,
+              row,
+            })
+          }
+        })
       }
 
-      // 2. Atualizar produtos existentes com novas seções/marcas se necessário (em paralelo)
+      // 2. Atualizar produtos existentes com novas seções/marcas se necessário (em paralelo adaptativo)
       const rowsWithUpdates = valid.filter((row) => {
         if (!row.matchedProduto) return false
         const normSecao =
@@ -695,28 +842,39 @@ export function ImportWizardModal({
           current: toAutoCreate.length,
           total: totalOperations,
           message: `Atualizando informações de ${rowsWithUpdates.length} produto(s)...`,
+          activeConcurrency: 2,
+          rateLimitedCount: rateLimitedHits,
         })
 
-        await processInParallel(rowsWithUpdates, CONCURRENCY, async (row) => {
-          if (!row.matchedProduto) return
-          const updates: Record<string, string> = {}
-          if (row.marca && row.matchedProduto.marca !== row.marca) {
-            updates.marca = row.marca
-          }
-          const normSecao =
-            normalizeSecao(row.secao) ||
-            (row.secao && row.secao.trim() ? (row.secao.trim() as any) : undefined)
-          if (normSecao && row.matchedProduto.secao !== normSecao) {
-            updates.secao = normSecao
-          }
-          if (Object.keys(updates).length > 0) {
-            try {
-              await executeWithRetry(() => updateProduto(row.matchedProduto!.id, updates))
-            } catch (updateErr) {
-              console.error('Erro ao atualizar produto:', updateErr)
+        await processWithAdaptiveConcurrency(
+          rowsWithUpdates,
+          async (row) => {
+            if (!row.matchedProduto) return
+            const updates: Record<string, string> = {}
+            if (row.marca && row.matchedProduto.marca !== row.marca) {
+              updates.marca = row.marca
             }
-          }
-        })
+            const normSecao =
+              normalizeSecao(row.secao) ||
+              (row.secao && row.secao.trim() ? (row.secao.trim() as any) : undefined)
+            if (normSecao && row.matchedProduto.secao !== normSecao) {
+              updates.secao = normSecao
+            }
+            if (Object.keys(updates).length > 0) {
+              try {
+                await executeWithRetry(() => updateProduto(row.matchedProduto!.id, updates))
+              } catch (updateErr) {
+                console.error('Erro ao atualizar dados complementares do produto:', updateErr)
+              }
+            }
+          },
+          {
+            initialConcurrency: 2,
+            minConcurrency: 1,
+            maxConcurrency: 3,
+            coolingOn429Ms: 600,
+          },
+        )
       }
 
       // 3. Processar itens do romaneio: somar aos itens existentes se mesmo código de produto ou criar novos
@@ -843,9 +1001,6 @@ export function ImportWizardModal({
             isUpdate: false,
             targetCode: (novoProduto.codigo || row.rawCode || '').trim(),
           })
-        } else {
-          // Se o produto falhou no auto-cadastro, não tenta criar o item no romaneio
-          totalFailures++
         }
       }
 
@@ -853,12 +1008,14 @@ export function ImportWizardModal({
         current: toAutoCreate.length,
         total: totalOperations,
         message: `Gravando itens no romaneio (0 de ${operationsToExecute.length})...`,
+        activeConcurrency: 2,
+        rateLimitedCount: rateLimitedHits,
       })
 
       // Separar as operações:
       // - updates (somas em itens existentes): agrupadas por targetCode e executadas sequencialmente
       //   para garantir que não haja race condition na soma do mesmo registro.
-      // - inserts (novos itens no romaneio): executados em paralelo com CONCURRENCY (3-4 workers simultâneos).
+      // - inserts (novos itens no romaneio): executados com controle adaptativo de concorrência.
       const updateOperations = operationsToExecute.filter((op) => op.isUpdate)
       const insertOperations = operationsToExecute.filter((op) => !op.isUpdate)
 
@@ -871,13 +1028,26 @@ export function ImportWizardModal({
         const resList = await processSequentially(
           updateOperations,
           async (op) => {
-            return executeWithRetry(() =>
-              updateRomaneioItem(op.existingItemId!, {
-                peso_total_kg: op.newTotalPesoKg!,
-                caixas: op.caixas,
-                pecas: op.pecas,
-                obs_acrescimo: op.newObsAcrescimo!,
-              }),
+            return executeWithRetry(
+              () =>
+                updateRomaneioItem(op.existingItemId!, {
+                  peso_total_kg: op.newTotalPesoKg!,
+                  caixas: op.caixas,
+                  pecas: op.pecas,
+                  obs_acrescimo: op.newObsAcrescimo!,
+                }),
+              (attempt, delayMs) => {
+                rateLimitedHits++
+                setImportProgress((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        rateLimitedCount: rateLimitedHits,
+                        message: `Atualizando item somado [${op.targetCode}] (cooling ${delayMs}ms, tentativa ${attempt})...`,
+                      }
+                    : null,
+                )
+              },
             )
           },
           () => {
@@ -887,43 +1057,81 @@ export function ImportWizardModal({
               current: overallDone,
               total: totalOperations,
               message: `Gravando... ${completedOperations} de ${operationsToExecute.length} gravados`,
+              activeConcurrency: 1,
+              rateLimitedCount: rateLimitedHits,
             })
           },
         )
-        resList.forEach((r, idx) => {
-          updateResults.push({ op: updateOperations[idx], result: r })
+        resList.forEach((r) => {
+          updateResults.push({ op: r.item, result: r.result })
         })
       }
 
-      // 3b. Executar inserts em paralelo real (concorrência controlada com retry)
+      // 3b. Executar inserts com controle dinâmico e adaptativo de concorrência
       if (insertOperations.length > 0) {
-        const resList = await processInParallel(
+        const resList = await processWithAdaptiveConcurrency(
           insertOperations,
-          CONCURRENCY,
           async (op) => {
-            return executeWithRetry(() =>
-              createRomaneioItem({
-                romaneio: romaneioId,
-                produto: op.produtoId,
-                peso_total_kg: op.pesoKg,
-                caixas: op.caixas,
-                pecas: op.pecas,
-                ...(op.observacao ? { observacao: op.observacao } : {}),
-              }),
+            return executeWithRetry(
+              () =>
+                createRomaneioItem({
+                  romaneio: romaneioId,
+                  produto: op.produtoId,
+                  peso_total_kg: op.pesoKg,
+                  caixas: op.caixas,
+                  pecas: op.pecas,
+                  ...(op.observacao ? { observacao: op.observacao } : {}),
+                }),
+              (attempt, delayMs) => {
+                rateLimitedHits++
+                setImportProgress((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        rateLimitedCount: rateLimitedHits,
+                        message: `Gravando item [${op.targetCode}] (cooling ${delayMs}ms, tentativa ${attempt})...`,
+                      }
+                    : null,
+                )
+              },
             )
           },
-          () => {
-            completedOperations++
-            const overallDone = Math.min(toAutoCreate.length + completedOperations, totalOperations)
-            setImportProgress({
-              current: overallDone,
-              total: totalOperations,
-              message: `Gravando... ${completedOperations} de ${operationsToExecute.length} gravados`,
-            })
+          {
+            initialConcurrency: 2,
+            minConcurrency: 1,
+            maxConcurrency: 3,
+            coolingOn429Ms: 750,
+            onItemCompleted: (done, total, conc) => {
+              completedOperations++
+              const overallDone = Math.min(
+                toAutoCreate.length + completedOperations,
+                totalOperations,
+              )
+              setImportProgress({
+                current: overallDone,
+                total: totalOperations,
+                message: `Gravando... ${completedOperations} de ${operationsToExecute.length} gravados`,
+                activeConcurrency: conc,
+                rateLimitedCount: rateLimitedHits,
+              })
+            },
+            onRateLimitHit: (conc, delay) => {
+              rateLimitedHits++
+              setImportProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      activeConcurrency: conc,
+                      rateLimitedCount: rateLimitedHits,
+                      message: `Ajustando fluxo para ${conc} requisição(ões) simultânea(s) devido a limite do servidor...`,
+                    }
+                  : null,
+              )
+            },
           },
         )
-        resList.forEach((r, idx) => {
-          insertResults.push({ op: insertOperations[idx], result: r })
+        resList.forEach((r) => {
+          insertResults.push({ op: r.item, result: r.result })
         })
       }
 
@@ -939,6 +1147,25 @@ export function ImportWizardModal({
           const prodIdentifier = op.row.rawCode || 'Desconhecido'
           const errorReason = getErrorMessage(res.reason)
           errorsList.push(`Item [${prodIdentifier}]: ${errorReason}`)
+          newFailures.push({
+            type: 'item_operation',
+            identifier: prodIdentifier,
+            reason: errorReason,
+            row: op.row,
+            itemOp: {
+              produtoId: op.produtoId,
+              produtoObj: op.produtoObj,
+              pesoKg: op.pesoKg,
+              caixas: op.caixas,
+              pecas: op.pecas,
+              observacao: op.observacao,
+              isUpdate: op.isUpdate,
+              existingItemId: op.existingItemId,
+              newTotalPesoKg: op.newTotalPesoKg,
+              newObsAcrescimo: op.newObsAcrescimo,
+              targetCode: op.targetCode,
+            },
+          })
           console.error(`Erro ao gravar item do romaneio para [${prodIdentifier}]:`, res.reason)
         }
       })
@@ -951,26 +1178,34 @@ export function ImportWizardModal({
         }
       }
 
-      // Verificação de integridade final: conferir quantos itens foram efetivamente gravados e informar
-      const totalEsperado = operationsToExecute.length
-      if (totalFailures > 0) {
-        const failSummary = errorsList.length > 0 ? ` (${errorsList.slice(0, 3).join('; ')})` : ''
+      setFailedOperations(newFailures)
+
+      // Verificação rigorosa de integridade:
+      // Se qualquer item falhou ou ficou pendente, NÃO fechar o modal e NÃO declarar sucesso integral!
+      const totalEsperado = operationsToExecute.length + (toAutoCreate.length - autoCreatedMap.size)
+      if (newFailures.length > 0) {
+        const failSummary = errorsList.length > 0 ? ` (${errorsList.slice(0, 2).join('; ')})` : ''
         toast({
-          title: totalImported > 0 ? 'Importação parcial concluída' : 'Falha na importação',
-          description: `${totalImported} de ${totalEsperado} gravados (${totalFailures} falha(s))${failSummary}.`,
+          title:
+            totalImported > 0
+              ? 'Importação parcial: atenção aos itens pendentes'
+              : 'Falha na importação',
+          description: `${totalImported} de ${totalEsperado} gravados com sucesso. ${newFailures.length} item(ns) falharam${failSummary}. Você pode reprocessá-los abaixo.`,
           variant: 'destructive',
         })
       } else {
         toast({
-          title: 'Importação concluída com sucesso!',
-          description: `${totalImported} de ${totalEsperado} gravados (${totalCaixas} cx • ${totalPecas} pct${toAutoCreate.length > 0 ? ` • ${toAutoCreate.length} novos produtos cadastrados` : ''}).`,
+          title: 'Importação 100% concluída!',
+          description: `Todos os ${totalImported} itens gravados com sucesso (${totalCaixas} cx • ${totalPecas} pct${toAutoCreate.length > 0 ? ` • ${toAutoCreate.length} novos produtos cadastrados` : ''}).`,
         })
       }
 
       if (totalImported > 0) {
         onImportComplete()
       }
-      if (totalFailures === 0) {
+
+      // SÓ fecha e reseta se NÃO HOUVER nenhuma falha
+      if (newFailures.length === 0) {
         onOpenChange(false)
         resetWizard()
       }
@@ -983,6 +1218,98 @@ export function ImportWizardModal({
     } finally {
       setLoading(false)
       setImportProgress(null)
+    }
+  }
+
+  // Função para reprocessar apenas os itens que falharam (Retry direcionado)
+  const handleRetryFailedItems = async () => {
+    if (failedOperations.length === 0 || retryingFailed) return
+    setRetryingFailed(true)
+
+    const remainingFailures: typeof failedOperations = []
+    let recoveredCount = 0
+
+    try {
+      for (const failed of failedOperations) {
+        try {
+          if (failed.type === 'auto_create') {
+            const normSecao = normalizeSecao(failed.row.secao)
+            const prod = await executeWithRetry(() =>
+              createProduto({
+                codigo: failed.row.rawCode,
+                nome: failed.row.nomeFromSheet || failed.row.rawCode,
+                marca: failed.row.marca || '',
+                secao: normSecao,
+                ativo: true,
+              }),
+            )
+            // Agora grava o item no romaneio
+            await executeWithRetry(() =>
+              createRomaneioItem({
+                romaneio: romaneioId,
+                produto: prod.id,
+                peso_total_kg: failed.row.pesoKg,
+                caixas: 0,
+                pecas: 0,
+                ...(failed.row.weightWarning || failed.row.isManuallyFixed
+                  ? { observacao: 'conferir peso' }
+                  : {}),
+              }),
+            )
+            recoveredCount++
+          } else if (failed.type === 'item_operation' && failed.itemOp) {
+            const op = failed.itemOp
+            if (op.isUpdate && op.existingItemId) {
+              await executeWithRetry(() =>
+                updateRomaneioItem(op.existingItemId!, {
+                  peso_total_kg: op.newTotalPesoKg!,
+                  caixas: op.caixas,
+                  pecas: op.pecas,
+                  obs_acrescimo: op.newObsAcrescimo!,
+                }),
+              )
+            } else {
+              await executeWithRetry(() =>
+                createRomaneioItem({
+                  romaneio: romaneioId,
+                  produto: op.produtoId,
+                  peso_total_kg: op.pesoKg,
+                  caixas: op.caixas,
+                  pecas: op.pecas,
+                  ...(op.observacao ? { observacao: op.observacao } : {}),
+                }),
+              )
+            }
+            recoveredCount++
+          }
+        } catch (err: unknown) {
+          const reason = getErrorMessage(err)
+          remainingFailures.push({ ...failed, reason })
+        }
+      }
+
+      setFailedOperations(remainingFailures)
+
+      if (recoveredCount > 0) {
+        onImportComplete()
+      }
+
+      if (remainingFailures.length === 0) {
+        toast({
+          title: 'Todos os itens pendentes foram gravados!',
+          description: `${recoveredCount} item(ns) recuperado(s) com sucesso. Total 100% íntegro.`,
+        })
+        onOpenChange(false)
+        resetWizard()
+      } else {
+        toast({
+          title: 'Tentativa concluída',
+          description: `${recoveredCount} item(ns) recuperado(s). Ainda restam ${remainingFailures.length} falha(s).`,
+          variant: 'destructive',
+        })
+      }
+    } finally {
+      setRetryingFailed(false)
     }
   }
 
@@ -1543,6 +1870,74 @@ export function ImportWizardModal({
                   </p>
                 </div>
 
+                {failedOperations.length > 0 && (
+                  <div className="border-2 border-red-400 rounded-xl p-4 bg-red-50/90 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold text-red-800">
+                          Atenção: {failedOperations.length} item(ns) NÃO foram gravados!
+                        </h4>
+                        <p className="text-xs text-red-700 mt-0.5">
+                          Para garantir a integridade total da carga, o modal não fecha enquanto
+                          houver itens pendentes. Você pode reprocessar apenas os itens rejeitados
+                          agora mesmo:
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[140px] overflow-y-auto space-y-1.5 border border-red-200 rounded-lg p-2 bg-white/80">
+                      {failedOperations.map((f, idx) => (
+                        <div
+                          key={`${f.identifier}-${idx}`}
+                          className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded bg-red-50 text-red-900 border border-red-100"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="font-mono font-bold bg-red-200/80 px-1.5 py-0.5 rounded text-[11px]">
+                              {f.identifier}
+                            </span>
+                            <span className="truncate">
+                              {f.row.nomeFromSheet || 'Item do romaneio'}
+                            </span>
+                          </div>
+                          <span
+                            className="text-[11px] text-red-600 font-medium shrink-0"
+                            title={f.reason}
+                          >
+                            {f.reason.length > 40 ? `${f.reason.slice(0, 40)}...` : f.reason}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <span className="text-xs text-red-700 font-medium">
+                        {retryingFailed
+                          ? 'Reprocessando itens pendentes...'
+                          : 'Clique para tentar novamente:'}
+                      </span>
+                      <Button
+                        type="button"
+                        onClick={handleRetryFailedItems}
+                        disabled={retryingFailed || loading}
+                        className="bg-red-600 hover:bg-red-700 text-white text-xs h-8 px-3"
+                      >
+                        {retryingFailed ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            Reprocessando...
+                          </>
+                        ) : (
+                          <>
+                            <RotateCw className="w-3.5 h-3.5 mr-1.5" />
+                            Tentar Novamente ({failedOperations.length})
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {loading && importProgress && (
                   <div className="border border-orange-200 rounded-xl p-4 bg-orange-50/80 space-y-2">
                     <div className="flex items-center justify-between text-xs font-semibold text-orange-800">
@@ -1562,6 +1957,19 @@ export function ImportWizardModal({
                       value={(importProgress.current / Math.max(importProgress.total, 1)) * 100}
                       className="h-2 bg-orange-100"
                     />
+                    <div className="flex items-center justify-between text-[11px] text-orange-700/80 pt-0.5">
+                      <span>
+                        Concorrência adaptativa:{' '}
+                        <strong>{importProgress.activeConcurrency ?? 2} worker(s)</strong>
+                      </span>
+                      {importProgress.rateLimitedCount !== undefined &&
+                        importProgress.rateLimitedCount > 0 && (
+                          <span className="text-amber-800 font-medium">
+                            {importProgress.rateLimitedCount} cooling(s) por 429 aplicados com
+                            sucesso
+                          </span>
+                        )}
+                    </div>
                   </div>
                 )}
 
@@ -1583,7 +1991,7 @@ export function ImportWizardModal({
               <Button
                 type="button"
                 variant="outline"
-                disabled={loading}
+                disabled={loading || retryingFailed}
                 onClick={() => setStep((s) => (s - 1) as any)}
               >
                 Voltar
@@ -1618,23 +2026,41 @@ export function ImportWizardModal({
               </Button>
             )}
             {step === 4 && (
-              <Button
-                type="button"
-                onClick={handleConfirmImport}
-                disabled={loading || !canConfirm}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {importProgress
-                      ? `Salvando... ${importProgress.current}/${importProgress.total}`
-                      : 'Importando...'}
-                  </>
-                ) : (
-                  'Confirmar Importação'
+              <div className="flex items-center gap-2">
+                {failedOperations.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      onOpenChange(false)
+                      resetWizard()
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-800"
+                    disabled={retryingFailed || loading}
+                  >
+                    Fechar mesmo com pendências
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirmImport}
+                  disabled={loading || retryingFailed || !canConfirm}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {importProgress
+                        ? `Salvando... ${importProgress.current}/${importProgress.total}`
+                        : 'Importando...'}
+                    </>
+                  ) : failedOperations.length > 0 ? (
+                    'Reiniciar Toda Importação'
+                  ) : (
+                    'Confirmar Importação'
+                  )}
+                </Button>
+              </div>
             )}
           </DialogFooter>
         </DialogContent>
