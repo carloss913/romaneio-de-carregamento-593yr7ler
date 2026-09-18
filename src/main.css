@@ -194,6 +194,16 @@
     margin-top: 8px !important;
     padding-top: 4px !important;
   }
+
+  /* Ocultar containers de notificações/toasts no papel (Sonner e Radix Toast) */
+  [data-sonner-toaster],
+  .toaster,
+  section[aria-label^='Notifications'],
+  div[data-radix-toast-viewport],
+  [role='status'],
+  [role='alert'] {
+    display: none !important;
+  }
 }
 
 @layer utilities {

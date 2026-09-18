@@ -95,6 +95,7 @@ export default function RomaneioDetail() {
   const produtoComboRef = useRef<HTMLDivElement>(null)
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [editingObs, setEditingObs] = useState(false)
   const [obsText, setObsText] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
@@ -348,13 +349,18 @@ export default function RomaneioDetail() {
   }
 
   const handleDeleteRomaneio = async () => {
+    if (!romaneio || isDeleting) return
+    setIsDeleting(true)
     try {
       await deleteItensByRomaneio(romaneio.id)
       await deleteRomaneio(romaneio.id)
       toast.success('Romaneio excluído')
       navigate(`/rotas/${encodeURIComponent(romaneio.rota)}`)
     } catch (err) {
+      console.error('Erro ao excluir romaneio:', err)
       toast.error('Erro ao excluir romaneio')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -919,11 +925,15 @@ export default function RomaneioDetail() {
             Esta ação apagará permanentemente o romaneio e seus itens.
           </p>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              disabled={isDeleting}
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleDeleteRomaneio}>
-              Excluir Definitivamente
+            <Button variant="destructive" disabled={isDeleting} onClick={handleDeleteRomaneio}>
+              {isDeleting ? 'Excluindo...' : 'Excluir Definitivamente'}
             </Button>
           </DialogFooter>
         </DialogContent>

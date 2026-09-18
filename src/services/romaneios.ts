@@ -56,19 +56,27 @@ export const updateRomaneio = (
   return pb.collection('romaneios').update<Romaneio>(id, formData)
 }
 
-export const deleteRomaneio = async (id: string, maxRetries = 3): Promise<boolean> => {
+export const deleteRomaneio = async (id: string, maxRetries = 15): Promise<boolean> => {
   let attempt = 0
   while (attempt < maxRetries) {
     try {
       return await pb.collection('romaneios').delete(id)
     } catch (err: any) {
       attempt++
-      if (err?.status === 404 || err?.response?.code === 404) {
+      const status = err?.status || err?.response?.code
+      if (status === 404 || String(err?.message || '').includes('404')) {
         return true // já foi excluído
       }
+      if (status === 400 || status === 403) {
+        // Erro definitivo do cliente
+        throw err
+      }
       if (attempt < maxRetries) {
-        const delay = (err?.status === 429 ? 400 : 200) * attempt
-        await new Promise((r) => setTimeout(r, delay))
+        const rateLimited = status === 429
+        const delay = rateLimited
+          ? Math.min(250 * Math.pow(1.3, Math.min(attempt - 1, 5)), 1800)
+          : Math.min(150 * attempt, 1200)
+        await new Promise((r) => setTimeout(r, Math.round(delay)))
         continue
       }
       throw err

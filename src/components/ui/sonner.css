@@ -2,3 +2,11 @@ section[aria-label^='Notifications'] {
   padding: 0 !important;
   margin: 0 !important;
 }
+
+@media print {
+  section[aria-label^='Notifications'],
+  [data-sonner-toaster],
+  [data-sonner-toast] {
+    display: none !important;
+  }
+}
