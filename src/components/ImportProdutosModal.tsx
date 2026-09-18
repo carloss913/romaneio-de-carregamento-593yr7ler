@@ -128,12 +128,11 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
     let created = 0,
       updated = 0
     let failed = 0
-    const BATCH_SIZE = 8
-    const DELAY_MS = 200
+    const CONCURRENCY = 4
 
     const executeWithRetry = async <T,>(
       operation: () => Promise<T>,
-      maxRetries = 3,
+      maxRetries = 4,
     ): Promise<T> => {
       let attempt = 0
       while (attempt < maxRetries) {
@@ -144,8 +143,10 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
           const is429 =
             err && typeof err === 'object' && 'status' in err && (err as any).status === 429
 
-          if (is429 && attempt < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 1000))
+          if (attempt < maxRetries) {
+            const baseDelay = is429 ? 400 * Math.pow(2, attempt - 1) : 300 * attempt
+            const jitter = Math.floor(Math.random() * 100)
+            await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter))
             continue
           }
           throw err
@@ -155,12 +156,17 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
     }
 
     try {
-      for (let i = 0; i < valid.length; i += BATCH_SIZE) {
-        const batch = valid.slice(i, i + BATCH_SIZE)
-        const batchResults = await Promise.allSettled(
-          batch.map(async (r) => {
-            const num = (s: string) => parseFloat(s.replace(',', '.'))
+      const results: { type?: 'created' | 'updated'; error?: unknown; row: (typeof valid)[0] }[] =
+        []
+      let nextIndex = 0
 
+      const runWorker = async () => {
+        while (nextIndex < valid.length) {
+          const currentIndex = nextIndex++
+          const r = valid[currentIndex]
+          const num = (s: string) => parseFloat(s.replace(',', '.'))
+
+          try {
             if (r.status === 'atualizar' && r.existingId) {
               const ex = existing.find((p) => p.id === r.existingId)
               const updateData: Record<string, unknown> = { ativo: ex?.ativo ?? true }
@@ -181,7 +187,7 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
               }
 
               await executeWithRetry(() => updateProduto(r.existingId!, updateData))
-              return { type: 'updated' as const }
+              results[currentIndex] = { type: 'updated', row: r }
             } else {
               const pc = r.peso_caixa_kg.trim() ? num(r.peso_caixa_kg) : 0
               const pp = r.peso_peca_kg.trim() ? num(r.peso_peca_kg) : 0
@@ -202,41 +208,45 @@ export function ImportProdutosModal({ open, onOpenChange, onSuccess }: Props) {
                 ativo: true,
               }
               await executeWithRetry(() => createProduto(data))
-              return { type: 'created' as const }
+              results[currentIndex] = { type: 'created', row: r }
             }
-          }),
-        )
-
-        batchResults.forEach((res, batchIdx) => {
-          if (res.status === 'fulfilled') {
-            if (res.value.type === 'created') created++
-            else updated++
-          } else {
-            failed++
-            const rowItem = batch[batchIdx]
-            toast({
-              title: `Falha ao importar produto [${rowItem.codigo || rowItem.nome}]`,
-              description: getErrorMessage(res.reason),
-              variant: 'destructive',
-            })
+          } catch (err) {
+            results[currentIndex] = { error: err, row: r }
           }
-        })
-
-        if (i + BATCH_SIZE < valid.length) {
-          await new Promise((resolve) => setTimeout(resolve, DELAY_MS))
         }
       }
 
+      const workers = Array.from({ length: Math.min(CONCURRENCY, valid.length) }, () => runWorker())
+      await Promise.all(workers)
+
+      results.forEach((res) => {
+        if (!res) return
+        if (res.error) {
+          failed++
+          toast({
+            title: `Falha ao importar produto [${res.row.codigo || res.row.nome}]`,
+            description: getErrorMessage(res.error),
+            variant: 'destructive',
+          })
+        } else if (res.type === 'created') {
+          created++
+        } else if (res.type === 'updated') {
+          updated++
+        }
+      })
+
+      const totalEsperado = valid.length
+      const totalGravados = created + updated
       if (failed > 0) {
         toast({
-          title: created + updated > 0 ? 'Importação parcial concluída' : 'Erro na importação',
-          description: `${created} criado(s), ${updated} atualizado(s), ${failed} falha(s).`,
-          variant: created + updated > 0 ? 'default' : 'destructive',
+          title: totalGravados > 0 ? 'Importação parcial concluída' : 'Erro na importação',
+          description: `${totalGravados} de ${totalEsperado} gravados (${failed} falha(s)).`,
+          variant: totalGravados > 0 ? 'default' : 'destructive',
         })
       } else {
         toast({
           title: 'Importação concluída!',
-          description: `${created} produto(s) criado(s) e ${updated} atualizado(s).`,
+          description: `${totalGravados} de ${totalEsperado} gravados (${created} novos, ${updated} atualizados).`,
         })
       }
 

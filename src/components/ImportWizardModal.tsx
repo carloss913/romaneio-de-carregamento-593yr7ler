@@ -451,8 +451,8 @@ export function ImportWizardModal({
     setProcessedRows((prev) => prev.filter((row) => row.matchStatus !== 'peso_invalido'))
   }
 
-  // Executa uma operação com até 5 tentativas no total se houver 429 Too Many Requests ou erro transitório com backoff exponencial
-  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 5): Promise<T> => {
+  // Executa uma operação com retry individual e backoff adaptativo curto/progressivo
+  const executeWithRetry = async <T,>(operation: () => Promise<T>, maxRetries = 4): Promise<T> => {
     let attempt = 0
     while (attempt < maxRetries) {
       try {
@@ -467,9 +467,11 @@ export function ImportWizardModal({
             (err as any).status === 429)
 
         if (attempt < maxRetries) {
-          const retryDelays = [2000, 5000, 10000, 15000, 20000]
-          const delayTime = is429 ? (retryDelays[attempt - 1] ?? 20000) : 1000 * attempt
-          await new Promise((resolve) => setTimeout(resolve, delayTime))
+          // Backoff adaptativo curto e progressivo: se 429 (rate limit), espera 400ms, 800ms, 1600ms com leve jitter;
+          // para outros erros de rede transitórios, espera 300ms, 600ms, 900ms.
+          const baseDelay = is429 ? 400 * Math.pow(2, attempt - 1) : 300 * attempt
+          const jitter = Math.floor(Math.random() * 100)
+          await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter))
           continue
         }
         throw err
@@ -478,25 +480,31 @@ export function ImportWizardModal({
     throw new Error('Número máximo de tentativas atingido.')
   }
 
-  // Executa uma lista de tarefas de forma sequencial com delay de 500ms entre cada item
-  const processInBatches = async <T, R>(
+  // Executa uma lista de tarefas com paralelismo real (concorrência de 3-4 requisições simultâneas)
+  // Cada item executa como requisição individual ao PocketBase com seu próprio retry independente.
+  // Sem delay artificial/cego entre itens. Em caso de 429 persistente, aplica cooling adaptativo.
+  const processInParallel = async <T, R>(
     items: T[],
-    batchSize: number,
-    delayMs: number,
+    concurrency: number,
     task: (item: T) => Promise<R>,
-    onBatchComplete?: (completedCount: number, total: number) => void,
+    onItemCompleted?: (completedCount: number, total: number) => void,
   ): Promise<PromiseSettledResult<R>[]> => {
-    const results: PromiseSettledResult<R>[] = []
-    let completed = 0
+    if (items.length === 0) return []
 
-    for (let i = 0; i < items.length; i += batchSize) {
-      const batch = items.slice(i, i + batchSize)
-      for (const item of batch) {
-        let had429Error = false
+    const results: PromiseSettledResult<R>[] = new Array(items.length)
+    let nextIndex = 0
+    let completedCount = 0
+
+    const runWorker = async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex++
+        const item = items[currentIndex]
+
+        let had429 = false
         try {
-          const result = await task(item)
-          results.push({ status: 'fulfilled', value: result } as PromiseFulfilledResult<R>)
-        } catch (err) {
+          const res = await task(item)
+          results[currentIndex] = { status: 'fulfilled', value: res }
+        } catch (err: unknown) {
           const is429 =
             (err instanceof ClientResponseError && err.status === 429) ||
             (typeof err === 'object' &&
@@ -504,24 +512,24 @@ export function ImportWizardModal({
               'status' in err &&
               (err as any).status === 429)
           if (is429) {
-            had429Error = true
+            had429 = true
           }
-          results.push({ status: 'rejected', reason: err } as PromiseRejectedResult)
-        }
-        completed++
-        onBatchComplete?.(Math.min(completed, items.length), items.length)
-
-        // Se o item falhou com 429 (mesmo após retries), pausa extra de 2000ms para esfriar o rate limiter
-        if (had429Error) {
-          await new Promise((resolve) => setTimeout(resolve, 2000))
+          results[currentIndex] = { status: 'rejected', reason: err }
         }
 
-        // Delay configurado entre itens (500ms)
-        if (completed < items.length) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs || 500))
+        completedCount++
+        onItemCompleted?.(completedCount, items.length)
+
+        // Cooling adaptativo caso o servidor ainda responda 429 após retries individuais
+        if (had429) {
+          await new Promise((resolve) => setTimeout(resolve, 800))
         }
       }
     }
+
+    const workerCount = Math.min(Math.max(concurrency, 1), items.length)
+    const workers = Array.from({ length: workerCount }, () => runWorker())
+    await Promise.all(workers)
 
     return results
   }
@@ -568,8 +576,8 @@ export function ImportWizardModal({
       message: 'Iniciando importação...',
     })
 
-    const BATCH_SIZE = 4
-    const DELAY_MS = 300
+    // Paralelismo real: 3 a 4 requisições simultâneas sem delay cego
+    const CONCURRENCY = 4
 
     try {
       let totalCaixas = 0
@@ -578,7 +586,7 @@ export function ImportWizardModal({
       let totalFailures = 0
       const errorsList: string[] = []
 
-      // 1. Processar auto-cadastros de produtos primeiro (em lotes)
+      // 1. Processar auto-cadastros de produtos primeiro (em paralelo 3-4 simultâneos)
       const autoCreatedMap = new Map<string, Produto>()
       if (toAutoCreate.length > 0) {
         setImportProgress({
@@ -587,10 +595,9 @@ export function ImportWizardModal({
           message: `Cadastrando ${toAutoCreate.length} novo(s) produto(s)...`,
         })
 
-        await processInBatches(
+        await processInParallel(
           toAutoCreate,
-          BATCH_SIZE,
-          DELAY_MS,
+          CONCURRENCY,
           async (row) => {
             try {
               const normSecao = normalizeSecao(row.secao)
@@ -628,7 +635,7 @@ export function ImportWizardModal({
         )
       }
 
-      // 2. Atualizar produtos existentes com novas seções/marcas se necessário (em lotes)
+      // 2. Atualizar produtos existentes com novas seções/marcas se necessário (em paralelo)
       const rowsWithUpdates = valid.filter((row) => {
         if (!row.matchedProduto) return false
         const normSecao =
@@ -646,7 +653,7 @@ export function ImportWizardModal({
           message: `Atualizando informações de ${rowsWithUpdates.length} produto(s)...`,
         })
 
-        await processInBatches(rowsWithUpdates, BATCH_SIZE, DELAY_MS, async (row) => {
+        await processInParallel(rowsWithUpdates, CONCURRENCY, async (row) => {
           if (!row.matchedProduto) return
           const updates: Record<string, string> = {}
           if (row.marca && row.matchedProduto.marca !== row.marca) {
@@ -772,13 +779,12 @@ export function ImportWizardModal({
       setImportProgress({
         current: toAutoCreate.length,
         total: totalOperations,
-        message: `Salvando itens no romaneio (0 de ${operationsToExecute.length})...`,
+        message: `Gravando itens no romaneio (0 de ${operationsToExecute.length})...`,
       })
 
-      const itemResults = await processInBatches(
+      const itemResults = await processInParallel(
         operationsToExecute,
-        BATCH_SIZE,
-        DELAY_MS,
+        CONCURRENCY,
         async (op) => {
           if (op.isUpdate && op.existingItem) {
             return executeWithRetry(() =>
@@ -807,7 +813,7 @@ export function ImportWizardModal({
           setImportProgress({
             current: overallDone,
             total: totalOperations,
-            message: `Salvando... ${overallDone} de ${totalOperations} itens`,
+            message: `Gravando... ${completed} de ${operationsToExecute.length} gravados`,
           })
         },
       )
@@ -836,16 +842,18 @@ export function ImportWizardModal({
         }
       }
 
+      // Verificação de integridade final: conferir quantos itens foram efetivamente gravados e informar
+      const totalEsperado = operationsToExecute.length
       if (totalFailures > 0) {
         toast({
           title: totalImported > 0 ? 'Importação parcial concluída' : 'Falha na importação',
-          description: `${totalImported} itens importados, ${totalFailures} falha(s).`,
+          description: `${totalImported} de ${totalEsperado} gravados (${totalFailures} falha(s)).`,
           variant: totalImported > 0 ? 'default' : 'destructive',
         })
       } else {
         toast({
-          title: 'Importação concluída!',
-          description: `${totalImported} produtos importados (${totalCaixas} cx • ${totalPecas} pct • ${toAutoCreate.length} auto-cadastrados).`,
+          title: 'Importação concluída com sucesso!',
+          description: `${totalImported} de ${totalEsperado} gravados (${totalCaixas} cx • ${totalPecas} pct • ${toAutoCreate.length} auto-cadastrados).`,
         })
       }
 
