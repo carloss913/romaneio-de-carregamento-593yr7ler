@@ -520,18 +520,38 @@ export function ImportWizardModal({
     return status === 400 || status === 403 || status === 404
   }
 
+  // Timeout para operações individuais de rede (ex: 20s para uma chamada não ficar pendente para sempre)
+  const withPerCallTimeout = <T,>(promise: Promise<T>, timeoutMs = 25000): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Tempo limite de requisição esgotado (${Math.round(timeoutMs / 1000)}s)`))
+      }, timeoutMs)
+      promise
+        .then((res) => {
+          clearTimeout(timer)
+          resolve(res)
+        })
+        .catch((err) => {
+          clearTimeout(timer)
+          reject(err)
+        })
+    })
+  }
+
   // Executa uma operação com retry PERSISTENTE:
   // Se receber 429 ou erro de rede transitório, nunca desiste após poucas tentativas (até 35 tentativas com backoff progressivo + jitter).
   // Apenas erros definitivos do cliente (400 validação, 403, 404) abortam de imediato.
+  // Cada tentativa individual possui timeout de segurança para prevenir await eterno.
   const executeWithRetry = async <T,>(
     operation: () => Promise<T>,
     onTransientWait?: (attempt: number, delayMs: number) => void,
     maxRetries = 35,
+    perCallTimeoutMs = 25000,
   ): Promise<T> => {
     let attempt = 0
     while (attempt < maxRetries) {
       try {
-        return await operation()
+        return await withPerCallTimeout(operation(), perCallTimeoutMs)
       } catch (err: unknown) {
         attempt++
         const rateLimited = isTooManyRequests(err)
@@ -572,6 +592,7 @@ export function ImportWizardModal({
   // Gerenciador de concorrência adaptativa com AIMD (Additive Increase / Multiplicative Decrease):
   // Começa com concorrência segura (ex: 2). Se ocorrer 429, reduz imediatamente para 1 worker e impõe cooling global.
   // Quando ocorrem sucessos seguidos, incrementa gradualmente até o teto (ex: 3-4).
+  // Garante saída sem hang mesmo em reduções extremas de concorrência.
   const processWithAdaptiveConcurrency = async <T, R>(
     items: T[],
     task: (item: T, workerId: number) => Promise<R>,
@@ -609,9 +630,17 @@ export function ImportWizardModal({
 
     const runWorker = async (workerId: number) => {
       while (true) {
+        if (nextIndex >= items.length) {
+          return
+        }
+
         // Se a concorrência adaptativa foi reduzida abaixo do ID deste worker, ele suspende
+        // até ser reativado ou todos os itens serem consumidos
         if (workerId > currentConcurrency) {
           await new Promise((r) => setTimeout(r, 120))
+          if (nextIndex >= items.length) {
+            return
+          }
           continue
         }
 
@@ -663,7 +692,8 @@ export function ImportWizardModal({
   }
 
   // Executa uma lista de operações sequencialmente (sem concorrência entre si)
-  // Utilizado para operações de soma no mesmo registro do PocketBase para evitar race conditions
+  // Utilizado para operações de soma no mesmo registro do PocketBase para evitar race conditions.
+  // Nunca trava o fluxo global: cada item captura seu próprio erro e avança.
   const processSequentially = async <T, R>(
     items: T[],
     task: (item: T) => Promise<R>,
@@ -680,10 +710,16 @@ export function ImportWizardModal({
         const res = await task(item)
         results.push({ item, result: { status: 'fulfilled', value: res } })
       } catch (err: unknown) {
+        console.error(`[processSequentially] Falha no item ${i + 1}/${items.length}:`, err)
         results.push({ item, result: { status: 'rejected', reason: err } })
+      } finally {
+        completedCount++
+        try {
+          onItemCompleted?.(completedCount, items.length)
+        } catch (cbErr) {
+          console.warn('[processSequentially] Erro no callback de progresso:', cbErr)
+        }
       }
-      completedCount++
-      onItemCompleted?.(completedCount, items.length)
     }
 
     return results
@@ -1023,12 +1059,31 @@ export function ImportWizardModal({
       const updateResults: { op: ItemOperation; result: PromiseSettledResult<any> }[] = []
       const insertResults: { op: ItemOperation; result: PromiseSettledResult<any> }[] = []
 
+      // Limite global de segurança: 5 minutos (300.000 ms) para a gravação de itens
+      const maxBatchExecutionTimeMs = 5 * 60 * 1000
+      const batchStartTime = Date.now()
+      const isBatchTimedOut = () => Date.now() - batchStartTime > maxBatchExecutionTimeMs
+
       // 3a. Executar updates de soma de forma serializada por segurança de concorrência
       if (updateOperations.length > 0) {
-        const resList = await processSequentially(
-          updateOperations,
-          async (op) => {
-            return executeWithRetry(
+        for (let idx = 0; idx < updateOperations.length; idx++) {
+          const op = updateOperations[idx]
+          if (isBatchTimedOut()) {
+            console.warn(
+              `[ImportWizard] Tempo limite de gravação esgotado (5min) no update do item [${op.targetCode}]`,
+            )
+            updateResults.push({
+              op,
+              result: {
+                status: 'rejected',
+                reason: new Error('Tempo limite máximo da gravação (5min) atingido.'),
+              },
+            })
+            continue
+          }
+
+          try {
+            const res = await executeWithRetry(
               () =>
                 updateRomaneioItem(op.existingItemId!, {
                   peso_total_kg: op.newTotalPesoKg!,
@@ -1049,8 +1104,11 @@ export function ImportWizardModal({
                 )
               },
             )
-          },
-          () => {
+            updateResults.push({ op, result: { status: 'fulfilled', value: res } })
+          } catch (err: unknown) {
+            console.error(`[ImportWizard] Falha no update do item [${op.targetCode}]:`, err)
+            updateResults.push({ op, result: { status: 'rejected', reason: err } })
+          } finally {
             completedOperations++
             const overallDone = Math.min(toAutoCreate.length + completedOperations, totalOperations)
             setImportProgress({
@@ -1060,11 +1118,8 @@ export function ImportWizardModal({
               activeConcurrency: 1,
               rateLimitedCount: rateLimitedHits,
             })
-          },
-        )
-        resList.forEach((r) => {
-          updateResults.push({ op: r.item, result: r.result })
-        })
+          }
+        }
       }
 
       // 3b. Executar inserts com controle dinâmico e adaptativo de concorrência
@@ -1072,6 +1127,9 @@ export function ImportWizardModal({
         const resList = await processWithAdaptiveConcurrency(
           insertOperations,
           async (op) => {
+            if (isBatchTimedOut()) {
+              throw new Error('Tempo limite máximo da gravação (5min) atingido.')
+            }
             return executeWithRetry(
               () =>
                 createRomaneioItem({
