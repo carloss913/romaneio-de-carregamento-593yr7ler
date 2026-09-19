@@ -99,25 +99,40 @@ export default function RotaDetail() {
     loadData()
   }, [loadData])
 
-  useRealtime('romaneios', debouncedLoadData)
-  useRealtime('romaneio_itens', debouncedLoadData)
+  // Pausa realtime durante exclusão em massa para não saturar requisições nem disputar rate limit
+  useRealtime('romaneios', debouncedLoadData, !isDeleting)
+  useRealtime('romaneio_itens', debouncedLoadData, !isDeleting)
 
   const handleDelete = async () => {
     const idToDelete = deleteDialog.id
     if (!idToDelete || isDeleting) return
     setIsDeleting(true)
     try {
-      // Exclui itens associados com controle de retries e backoff
-      await deleteItensByRomaneio(idToDelete)
+      // Exclui itens associados com concorrência suave e retries persistentes
+      const result = await deleteItensByRomaneio(idToDelete)
+
+      // Se algum item falhou de forma definitiva, NÃO apaga o romaneio pai
+      if (result.failedItens.length > 0) {
+        toast.error(
+          `Não foi possível excluir ${result.failedItens.length} de ${result.total} item(ns). O romaneio não foi apagado para preservar os dados.`,
+        )
+        return
+      }
+
       await deleteRomaneio(idToDelete)
-      toast.success('Romaneio excluído')
+      toast.success('Romaneio excluído com sucesso')
       setDeleteDialog({ open: false, id: undefined })
-      await loadData()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao excluir romaneio:', err)
       toast.error('Erro ao excluir romaneio')
     } finally {
       setIsDeleting(false)
+      // Atualiza a lista UMA ÚNICA VEZ no final, independentemente de sucesso ou falha
+      try {
+        await loadData()
+      } catch {
+        /* ignore */
+      }
     }
   }
 

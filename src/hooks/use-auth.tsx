@@ -31,7 +31,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (pb.authStore.isValid) {
       pb.collection('users')
         .authRefresh()
-        .catch(() => pb.authStore.clear())
+        .catch((err: any) => {
+          // Só limpa a sessão se for erro definitivo de autenticação (ex.: 401 token inválido/expirado).
+          // Se for 403 (permissão de collection/rota), 429 (rate limit) ou erro de rede (status 0 / timeout),
+          // NÃO desloga o usuário da sessão existente, evitando expulsão indevida para /login.
+          const status = Number(err?.status || err?.response?.code) || 0
+          if (status === 401) {
+            pb.authStore.clear()
+          } else {
+            console.warn(
+              '[useAuth] Falha no authRefresh não-crítica (mantendo sessão local):',
+              status,
+              err,
+            )
+          }
+        })
         .finally(() => setLoading(false))
     } else {
       if (pb.authStore.record) pb.authStore.clear()

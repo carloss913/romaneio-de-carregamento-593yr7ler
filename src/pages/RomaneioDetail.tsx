@@ -206,9 +206,10 @@ export default function RomaneioDetail() {
     })
   }, [loadData])
 
-  useRealtime('romaneios', debouncedLoadData)
-  useRealtime('romaneio_itens', debouncedLoadData)
-  useRealtime('produtos', debouncedHandleRefresh)
+  // Pausa realtime durante exclusão em massa para não disparar requisições concorrentes
+  useRealtime('romaneios', debouncedLoadData, !isDeleting)
+  useRealtime('romaneio_itens', debouncedLoadData, !isDeleting)
+  useRealtime('produtos', debouncedHandleRefresh, !isDeleting)
 
   useEffect(() => {
     if (!showSugestoes) return
@@ -352,15 +353,29 @@ export default function RomaneioDetail() {
     if (!romaneio || isDeleting) return
     setIsDeleting(true)
     try {
-      await deleteItensByRomaneio(romaneio.id)
+      const result = await deleteItensByRomaneio(romaneio.id)
+
+      if (result.failedItens.length > 0) {
+        toast.error(
+          `Não foi possível excluir ${result.failedItens.length} de ${result.total} item(ns). O romaneio não foi apagado para preservar os dados.`,
+        )
+        return
+      }
+
       await deleteRomaneio(romaneio.id)
-      toast.success('Romaneio excluído')
+      toast.success('Romaneio excluído com sucesso')
       navigate(`/rotas/${encodeURIComponent(romaneio.rota)}`)
     } catch (err) {
       console.error('Erro ao excluir romaneio:', err)
       toast.error('Erro ao excluir romaneio')
     } finally {
       setIsDeleting(false)
+      // Se não navegou embora (ex: erro/cancelamento), atualiza a lista uma única vez
+      try {
+        await loadData()
+      } catch {
+        /* ignore */
+      }
     }
   }
 

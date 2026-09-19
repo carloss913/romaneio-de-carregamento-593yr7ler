@@ -56,15 +56,30 @@ export const updateRomaneio = (
   return pb.collection('romaneios').update<Romaneio>(id, formData)
 }
 
-export const deleteRomaneio = async (id: string, maxRetries = 15): Promise<boolean> => {
+export const deleteRomaneio = async (
+  id: string,
+  maxRetries = 35,
+  timeoutMs = 25000,
+): Promise<boolean> => {
   let attempt = 0
   while (attempt < maxRetries) {
     try {
-      return await pb.collection('romaneios').delete(id)
+      const deletePromise = pb.collection('romaneios').delete(id)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Timeout ao excluir romaneio ${id} após ${timeoutMs}ms`))
+        }, timeoutMs)
+      })
+
+      const res = await Promise.race([deletePromise, timeoutPromise])
+      if (timer) clearTimeout(timer)
+      return res
     } catch (err: any) {
       attempt++
-      const status = err?.status || err?.response?.code
-      if (status === 404 || String(err?.message || '').includes('404')) {
+      const status = Number(err?.status || err?.response?.code) || 0
+      const msg = String(err?.message || '')
+      if (status === 404 || msg.includes('404')) {
         return true // já foi excluído
       }
       if (status === 400 || status === 403) {
@@ -72,11 +87,13 @@ export const deleteRomaneio = async (id: string, maxRetries = 15): Promise<boole
         throw err
       }
       if (attempt < maxRetries) {
-        const rateLimited = status === 429
-        const delay = rateLimited
-          ? Math.min(250 * Math.pow(1.3, Math.min(attempt - 1, 5)), 1800)
-          : Math.min(150 * attempt, 1200)
-        await new Promise((r) => setTimeout(r, Math.round(delay)))
+        const rateLimited =
+          status === 429 || msg.includes('429') || msg.toLowerCase().includes('too many requests')
+        const baseDelay = rateLimited
+          ? Math.min(500 * Math.pow(1.35, Math.min(attempt - 1, 8)), 4000)
+          : Math.min(200 * attempt, 2000)
+        const jitter = Math.floor(Math.random() * 250)
+        await new Promise((r) => setTimeout(r, Math.round(baseDelay + jitter)))
         continue
       }
       throw err

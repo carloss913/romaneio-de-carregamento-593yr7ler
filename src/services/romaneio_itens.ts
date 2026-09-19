@@ -34,8 +34,11 @@ export const updateRomaneioItem = (
 
 // Helpers para classificação de erros HTTP / PocketBase
 export const isTooManyRequests = (err: unknown): boolean => {
-  if (err && typeof err === 'object' && 'status' in err) {
-    return (err as { status: unknown }).status === 429
+  if (err && typeof err === 'object') {
+    const status = (err as any).status || (err as any).response?.code
+    if (status === 429) return true
+    const msg = String((err as any).message || '')
+    if (msg.includes('429') || msg.toLowerCase().includes('too many requests')) return true
   }
   return false
 }
@@ -45,8 +48,8 @@ export const isPermanentClientError = (err: unknown): boolean => {
   // 404 não é erro na exclusão (já não existe).
   // 429, 500, 502, 503, 504 ou 0 (rede/timeout) são transitórios.
   let status = 0
-  if (err && typeof err === 'object' && 'status' in err) {
-    status = Number((err as { status: unknown }).status) || 0
+  if (err && typeof err === 'object') {
+    status = Number((err as any).status || (err as any).response?.code) || 0
   }
   return status === 400 || status === 403
 }
@@ -61,26 +64,44 @@ export const isNotFoundError = (err: unknown): boolean => {
   return false
 }
 
-export const deleteRomaneioItem = async (id: string, maxRetries = 25): Promise<boolean> => {
+export const deleteRomaneioItem = async (
+  id: string,
+  maxRetries = 35,
+  timeoutMs = 25000,
+): Promise<boolean> => {
   let attempt = 0
   while (attempt < maxRetries) {
     try {
-      return await pb.collection('romaneio_itens').delete(id)
+      // Timeout defensivo de 25s por tentativa para não pendurar requisição eternamente
+      const deletePromise = pb.collection('romaneio_itens').delete(id)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Timeout ao excluir item ${id} após ${timeoutMs}ms`))
+        }, timeoutMs)
+      })
+
+      const res = await Promise.race([deletePromise, timeoutPromise])
+      if (timer) clearTimeout(timer)
+      return res
     } catch (err: any) {
       attempt++
       if (isNotFoundError(err)) {
-        return true // já foi excluído
+        return true // já foi excluído com sucesso
       }
       if (isPermanentClientError(err)) {
         console.warn(`[deleteRomaneioItem] Erro definitivo ao excluir item ${id}:`, err)
         throw err
       }
+
+      // Se for 429 ou transitório, nunca aborta enquanto houver tentativas
       if (attempt < maxRetries) {
         const rateLimited = isTooManyRequests(err)
+        // Backoff exponencial com jitter (~500ms a ~4000ms para 429)
         const baseDelay = rateLimited
-          ? Math.min(250 * Math.pow(1.3, Math.min(attempt - 1, 6)), 2000)
-          : Math.min(150 * attempt, 1500)
-        const jitter = Math.floor(Math.random() * 100)
+          ? Math.min(500 * Math.pow(1.35, Math.min(attempt - 1, 8)), 4000)
+          : Math.min(200 * attempt, 2000)
+        const jitter = Math.floor(Math.random() * 250)
         await new Promise((r) => setTimeout(r, Math.round(baseDelay + jitter)))
         continue
       }
@@ -90,128 +111,83 @@ export const deleteRomaneioItem = async (id: string, maxRetries = 25): Promise<b
   return false
 }
 
+export interface DeleteItensResult {
+  total: number
+  deleted: number
+  failedItens: { id: string; nome?: string; error: string }[]
+}
+
 /**
- * Exclusão veloz e adaptativa dos itens de um romaneio.
- * Inicia com concorrência agressiva (~10 a 12 exclusões simultâneas),
- * ZERO pausas artificiais entre exclusões.
- * Se ocorrer 429/erro transitório, reduz concorrência com cooling curto e retry persistente,
- * aumentando novamente após sucessos consecutivos.
- * Em caso de erro definitivo (400, 403 ou esgotamento de retries), aborta e lança exceção.
+ * Exclusão com concorrência CONSTANTE baixa (3 a 4 trabalhadores simultâneos),
+ * evitando rajadas que disparam rate limit 429 no PocketBase.
+ * 429 nunca aborta: faz retry persistente com backoff exponencial + jitter.
+ * Se houver falha definitiva em itens específicos, retorna o relatório honesto
+ * sem apagar o romaneio pai.
  */
 export const deleteItensByRomaneio = async (
   romaneioId: string,
   options?: {
-    initialConcurrency?: number
-    minConcurrency?: number
-    maxConcurrency?: number
-    coolingOn429Ms?: number
+    concurrency?: number
+    maxRetriesPerItem?: number
   },
-) => {
+): Promise<DeleteItensResult> => {
   let itens: RomaneioItem[] = []
   try {
     itens = await getRomaneioItens(romaneioId)
   } catch (err: any) {
-    if (isNotFoundError(err)) return
+    if (isNotFoundError(err)) {
+      return { total: 0, deleted: 0, failedItens: [] }
+    }
     console.warn(`Erro ao listar itens para exclusão do romaneio ${romaneioId}:`, err)
     throw err
   }
-  if (!itens || itens.length === 0) return
-
-  const minC = options?.minConcurrency ?? 2
-  const maxC = options?.maxConcurrency ?? 12
-  const initialC = Math.min(Math.max(options?.initialConcurrency ?? 12, minC), maxC)
-  const coolingMs = options?.coolingOn429Ms ?? 300
-
-  let currentConcurrency = initialC
-  let consecutiveSuccesses = 0
-  let pauseUntil = 0
-  let fatalError: any = null
-
-  let nextIndex = 0
-
-  const waitIfCooling = async () => {
-    const now = Date.now()
-    if (pauseUntil > now) {
-      await new Promise((r) => setTimeout(r, pauseUntil - now))
-    }
+  if (!itens || itens.length === 0) {
+    return { total: 0, deleted: 0, failedItens: [] }
   }
 
-  const runWorker = async (workerId: number) => {
+  // Concorrência CONSTANTE de 3 conexões simultâneas (máximo seguro de 4)
+  const concurrency = Math.min(Math.max(options?.concurrency ?? 3, 1), 4)
+  const maxRetries = options?.maxRetriesPerItem ?? 35
+
+  const failedItens: { id: string; nome?: string; error: string }[] = []
+  let deletedCount = 0
+  let nextIndex = 0
+
+  const runWorker = async () => {
     while (true) {
-      if (fatalError || nextIndex >= itens.length) {
-        return
-      }
-
-      if (workerId > currentConcurrency) {
-        await new Promise((r) => setTimeout(r, 40))
-        if (fatalError || nextIndex >= itens.length) {
-          return
-        }
-        continue
-      }
-
-      await waitIfCooling()
-
-      if (fatalError || nextIndex >= itens.length) {
-        return
-      }
-
       const currentIndex = nextIndex++
       if (currentIndex >= itens.length) {
         return
       }
 
       const item = itens[currentIndex]
-
       try {
-        await deleteRomaneioItem(item.id)
-
-        // Sucesso: sobe concorrência progressivamente se estiver abaixo do teto
-        consecutiveSuccesses++
-        if (consecutiveSuccesses >= 10 && currentConcurrency < maxC) {
-          currentConcurrency = Math.min(currentConcurrency + 1, maxC)
-          consecutiveSuccesses = 0
-        }
+        await deleteRomaneioItem(item.id, maxRetries)
+        deletedCount++
       } catch (err: any) {
         if (isNotFoundError(err)) {
-          // Já não existe, ignora e segue
+          deletedCount++
           continue
         }
-
-        if (isTooManyRequests(err)) {
-          // 429: Reduz concorrência pela metade e aplica cooling curto
-          currentConcurrency = Math.max(minC, Math.floor(currentConcurrency / 2))
-          consecutiveSuccesses = 0
-          const now = Date.now()
-          pauseUntil = Math.max(pauseUntil, now + coolingMs)
-          await new Promise((r) => setTimeout(r, coolingMs))
-          // Tenta novamente este mesmo item que falhou
-          try {
-            await deleteRomaneioItem(item.id)
-          } catch (retryErr: any) {
-            if (!isNotFoundError(retryErr)) {
-              fatalError = retryErr
-              throw retryErr
-            }
-          }
-        } else if (isPermanentClientError(err)) {
-          fatalError = err
-          throw err
-        } else {
-          // Erro transitório que não foi recuperado pelo deleteRomaneioItem
-          fatalError = err
-          throw err
-        }
+        const errorMsg = String(err?.message || err || 'Erro desconhecido')
+        console.error(`[deleteItensByRomaneio] Falha ao excluir item ${item.id}:`, err)
+        failedItens.push({
+          id: item.id,
+          nome: item.expand?.produto?.nome,
+          error: errorMsg,
+        })
       }
     }
   }
 
-  const workerCount = Math.min(maxC, itens.length)
-  const workers = Array.from({ length: workerCount }, (_, i) => runWorker(i + 1))
+  const workerCount = Math.min(concurrency, itens.length)
+  const workers = Array.from({ length: workerCount }, () => runWorker())
   await Promise.all(workers)
 
-  if (fatalError) {
-    throw fatalError
+  return {
+    total: itens.length,
+    deleted: deletedCount,
+    failedItens,
   }
 }
 
