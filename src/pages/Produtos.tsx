@@ -7,9 +7,12 @@ import {
   CheckCircle2,
   XCircle,
   Upload,
+  Download,
   AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import { Produto } from '@/types/database'
+import { downloadProdutosCsv } from '@/lib/product-export'
 import { formatWeight } from '@/lib/conversion'
 import { getProdutos, updateProduto, deleteProduto } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
@@ -43,6 +46,7 @@ export default function Produtos() {
   const [showIncomplete, setShowIncomplete] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   const [configPhone, setConfigPhone] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   const isProdutoIncomplete = (p: Produto) => {
     if (p.unidade_medida === 'unidade' || p.unidade_medida === 'pacote') {
@@ -78,6 +82,37 @@ export default function Produtos() {
   }, [])
 
   useRealtime('produtos', () => loadData())
+
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      // Carrega a coleção completa de produtos diretamente do backend para garantir todos os registros
+      const allProdutos = await getProdutos()
+      if (!allProdutos || allProdutos.length === 0) {
+        toast({
+          title: 'Nenhum produto para exportar',
+          description: 'O catálogo está vazio.',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      downloadProdutosCsv(allProdutos)
+      toast({
+        title: 'Exportação concluída',
+        description: `${allProdutos.length} produto(s) exportado(s) com sucesso.`,
+      })
+    } catch (err) {
+      console.error('Erro ao exportar produtos:', err)
+      toast({
+        title: 'Erro ao exportar produtos',
+        description: 'Não foi possível gerar a planilha de exportação.',
+        variant: 'destructive',
+      })
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const handleToggleStatus = async (p: Produto) => {
     try {
@@ -145,13 +180,27 @@ export default function Produtos() {
           </p>
         </div>
 
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button
+            onClick={handleExport}
+            disabled={exporting}
+            variant="outline"
+            className="font-bold rounded-xl border-slate-300 text-slate-700 hover:bg-slate-50"
+            title="Exportar todos os produtos cadastrados para Excel/CSV"
+          >
+            {exporting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin text-orange-500" />
+            ) : (
+              <Download className="w-4 h-4 mr-2 text-emerald-600" />
+            )}
+            {exporting ? 'Exportando...' : 'Exportar'}
+          </Button>
           <Button
             onClick={() => setImportOpen(true)}
             variant="outline"
             className="font-bold rounded-xl border-slate-300 text-slate-700 hover:bg-slate-50"
           >
-            <Upload className="w-4 h-4 mr-2" /> Importar Planilha
+            <Upload className="w-4 h-4 mr-2 text-slate-600" /> Importar Planilha
           </Button>
           <Button
             onClick={() => {
