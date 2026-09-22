@@ -6,7 +6,6 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
-  Upload,
   Download,
   AlertCircle,
   Loader2,
@@ -29,7 +28,6 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { ProdutoModal } from '@/components/ProdutoModal'
-import { ImportProdutosModal } from '@/components/ImportProdutosModal'
 import { ConfigPhoneModal } from '@/components/ConfigPhoneModal'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useToast } from '@/hooks/use-toast'
@@ -42,7 +40,6 @@ export default function Produtos() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
   const [showIncomplete, setShowIncomplete] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   const [configPhone, setConfigPhone] = useState('')
@@ -194,13 +191,6 @@ export default function Produtos() {
               <Download className="w-4 h-4 mr-2 text-emerald-600" />
             )}
             {exporting ? 'Exportando...' : 'Exportar'}
-          </Button>
-          <Button
-            onClick={() => setImportOpen(true)}
-            variant="outline"
-            className="font-bold rounded-xl border-slate-300 text-slate-700 hover:bg-slate-50"
-          >
-            <Upload className="w-4 h-4 mr-2 text-slate-600" /> Importar Planilha
           </Button>
           <Button
             onClick={() => {
@@ -404,8 +394,6 @@ export default function Produtos() {
         produto={selectedProduto}
         onSuccess={loadData}
       />
-
-      <ImportProdutosModal open={importOpen} onOpenChange={setImportOpen} onSuccess={loadData} />
 
       <ConfigPhoneModal open={configOpen} onOpenChange={setConfigOpen} onSuccess={loadData} />
     </div>
