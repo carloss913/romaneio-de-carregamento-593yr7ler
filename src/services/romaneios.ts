@@ -7,11 +7,25 @@ export const getRomaneios = (filter?: string) =>
     sort: '-data,-created',
   })
 
-export const getRomaneiosByRota = (rota: RotaType) =>
-  pb.collection('romaneios').getFullList<Romaneio>({
-    filter: `rota = "${rota}"`,
+export const getRomaneiosByRota = (
+  rota: RotaType,
+  options?: { filter?: string; perPage?: number; page?: number },
+) => {
+  let filter = `rota = "${rota}"`
+  if (options?.filter) {
+    filter = `(${filter}) && (${options.filter})`
+  }
+  if (options?.perPage) {
+    return pb.collection('romaneios').getList<Romaneio>(options.page || 1, options.perPage, {
+      filter,
+      sort: '-data,-created',
+    })
+  }
+  return pb.collection('romaneios').getFullList<Romaneio>({
+    filter,
     sort: '-data,-created',
   })
+}
 
 export const getRomaneio = (id: string) => pb.collection('romaneios').getOne<Romaneio>(id)
 
