@@ -53,6 +53,7 @@ export interface Configuracoes extends RecordModel {
   nome_destinatario: string
   telefone_contato?: string
   nome_contato?: string
+  auto_delete_months?: number
 }
 
 export const SECAO_ORDER: Record<string, number> = {

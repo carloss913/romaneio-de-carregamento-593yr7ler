@@ -17,7 +17,6 @@ import { RotaType, Romaneio, RomaneioItem } from '@/types/database'
 import { formatWeight } from '@/lib/conversion'
 import { getRomaneiosByRota, deleteRomaneio } from '@/services/romaneios'
 import { deleteItensByRomaneio } from '@/services/romaneio_itens'
-import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -205,15 +204,6 @@ export default function RotaDetail() {
   }, [])
 
   useEffect(() => {
-    // Dispara a rotina de exclusão automática (fire-and-forget) e
-    // recarrega a lista caso algo tenha sido removido.
-    runAutoDelete()
-      .then((excluidos) => {
-        if (excluidos > 0) loadData()
-      })
-      .catch((err) => {
-        console.error('Erro na exclusão automática:', err)
-      })
     loadData()
   }, [loadData, startDate, endDate])
 

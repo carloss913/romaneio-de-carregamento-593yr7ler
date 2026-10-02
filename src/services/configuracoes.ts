@@ -17,6 +17,7 @@ export const saveConfiguracoes = (data: {
   nome_destinatario?: string
   telefone_contato?: string
   nome_contato?: string
+  auto_delete_months?: number
 }) =>
   getConfiguracoes().then((existing) => {
     if (existing) {

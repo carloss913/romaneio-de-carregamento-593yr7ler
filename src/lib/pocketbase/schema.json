@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-30T19:57:57.779Z",
+  "generatedAt": "2026-10-02T12:17:09.068Z",
   "collections": [
     {
       "name": "users",
@@ -293,8 +293,8 @@
       "apiRules": {
         "list": "",
         "view": "",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
+        "create": "",
+        "update": "",
         "delete": "@request.auth.id != ''"
       },
       "fields": [
@@ -333,6 +333,12 @@
         {
           "name": "nome_contato",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "auto_delete_months",
+          "type": "number",
           "required": false,
           "system": false
         }

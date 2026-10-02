@@ -4,7 +4,6 @@ import { Truck, ChevronRight, FileText, Scale, CheckCircle2, Package, Plus } fro
 import { Romaneio, RomaneioItem } from '@/types/database'
 import { formatWeight } from '@/lib/conversion'
 import { getRomaneios } from '@/services/romaneios'
-import { runAutoDelete } from '@/services/autoDelete'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -80,14 +79,6 @@ export default function Index() {
   }, [loadData])
 
   useEffect(() => {
-    // Dispara a rotina de exclusão automática de romaneios finalizados
-    // antigos conforme o prazo configurado em "Configurações". É fire-and-forget:
-    // recarrega a lista em seguida para refletir eventuais remoções.
-    runAutoDelete()
-      .then((excluidos) => {
-        if (excluidos > 0) loadData()
-      })
-      .catch((err) => console.error('Auto-delete falhou:', err))
     loadData()
 
     return () => {

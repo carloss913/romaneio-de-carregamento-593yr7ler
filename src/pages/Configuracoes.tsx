@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Save, Trash2, AlertTriangle, Clock } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Save, Trash2, AlertTriangle, Clock, Loader2 } from 'lucide-react'
 import {
   getAutoDeleteMonths,
   setAutoDeleteMonths,
@@ -19,19 +19,42 @@ import { useToast } from '@/hooks/use-toast'
 export default function Configuracoes() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [meses, setMeses] = useState<number>(() => getAutoDeleteMonths())
+  const [fetching, setFetching] = useState(true)
+  const [meses, setMeses] = useState<number>(0)
+
+  useEffect(() => {
+    let isMounted = true
+    getAutoDeleteMonths()
+      .then((val) => {
+        if (isMounted) {
+          setMeses(val)
+        }
+      })
+      .catch((err) => {
+        console.error('Erro ao carregar prazo de limpeza automática:', err)
+      })
+      .finally(() => {
+        if (isMounted) {
+          setFetching(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
-      setAutoDeleteMonths(meses)
+      await setAutoDeleteMonths(meses)
       toast({
         title: 'Configuração salva!',
         description:
           meses > 0
-            ? `Romaneios finalizados há mais de ${meses} meses serão excluídos.`
-            : 'Limpeza automática desativada.',
+            ? `Romaneios finalizados há mais de ${meses} meses serão excluídos diariamente pelo servidor.`
+            : 'Limpeza automática desativada no servidor.',
       })
     } catch (_) {
       toast({
@@ -70,14 +93,16 @@ export default function Configuracoes() {
               <label className="text-sm font-semibold text-slate-700">Prazo de exclusão</label>
               <Select
                 value={String(meses)}
+                disabled={fetching || loading}
                 onValueChange={(v) => {
                   const val = Number(v)
                   setMeses(val)
-                  setAutoDeleteMonths(val)
                 }}
               >
                 <SelectTrigger className="bg-white rounded-xl border-slate-200">
-                  <SelectValue placeholder="Selecione o prazo" />
+                  <SelectValue
+                    placeholder={fetching ? 'Carregando configuração...' : 'Selecione o prazo'}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {AUTO_DELETE_OPTIONS.map((opt) => (
@@ -97,7 +122,8 @@ export default function Configuracoes() {
                   automaticamente.
                 </p>
                 <p className="text-xs text-slate-400">
-                  A verificação ocorre ao carregar a página inicial e a lista de romaneios.
+                  A limpeza ocorre automaticamente todos os dias às 03:00 (servidor), de forma
+                  centralizada para todos os dispositivos.
                 </p>
               </div>
             )}
@@ -116,11 +142,14 @@ export default function Configuracoes() {
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || fetching}
               className="bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl"
             >
               {loading ? (
-                'Salvando...'
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
               ) : (
                 <>
                   {meses > 0 ? (
