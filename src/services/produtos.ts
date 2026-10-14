@@ -1,7 +1,11 @@
 import pb from '@/lib/pocketbase/client'
 import { Produto } from '@/types/database'
 
-export const getProdutos = () => pb.collection('produtos').getFullList<Produto>({ sort: 'codigo' })
+export const getProdutos = (options?: { fields?: string }) =>
+  pb.collection('produtos').getFullList<Produto>({
+    sort: 'codigo',
+    fields: options?.fields,
+  })
 
 export const getProduto = (id: string) => pb.collection('produtos').getOne<Produto>(id)
 

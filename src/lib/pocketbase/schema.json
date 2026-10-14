@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T12:17:09.068Z",
+  "generatedAt": "2026-10-14T16:51:22.156Z",
   "collections": [
     {
       "name": "users",
@@ -128,7 +128,8 @@
       ],
       "indexes": [
         "CREATE INDEX `idx_produtos_nome_nonunique` ON `produtos` (nome)",
-        "CREATE UNIQUE INDEX `idx_produtos_codigo` ON `produtos` (codigo) WHERE codigo != ''"
+        "CREATE UNIQUE INDEX `idx_produtos_codigo` ON `produtos` (codigo) WHERE codigo != ''",
+        "CREATE INDEX `idx_produtos_sort_codigo` ON `produtos` (codigo)"
       ]
     },
     {

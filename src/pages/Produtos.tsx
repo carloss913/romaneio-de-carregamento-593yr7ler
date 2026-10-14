@@ -61,7 +61,10 @@ export default function Produtos() {
 
   const loadData = async () => {
     try {
-      const list = await getProdutos()
+      const list = await getProdutos({
+        fields:
+          'id,codigo,nome,marca,secao,unidade_medida,peso_caixa_kg,pecas_por_caixa,peso_peca_kg,ativo,created,updated',
+      })
       setProdutos(list)
       try {
         const config = await getConfiguracoes()
