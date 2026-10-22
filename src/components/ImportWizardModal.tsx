@@ -281,7 +281,10 @@ export function ImportWizardModal({
     setLoading(true)
     let produtosAtuais = produtos
     try {
-      produtosAtuais = await getProdutos()
+      produtosAtuais = await getProdutos({
+        fields:
+          'id,codigo,nome,marca,secao,unidade_medida,peso_caixa_kg,pecas_por_caixa,peso_peca_kg,ativo',
+      })
     } catch (err) {
       toast({
         title: 'Erro ao buscar produtos',

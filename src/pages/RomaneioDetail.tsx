@@ -109,20 +109,39 @@ export default function RomaneioDetail() {
 
   const isDeletedRef = useRef(false)
 
+  const [loadingProdutos, setLoadingProdutos] = useState(false)
+
+  // Busca catálogo enxuto sob demanda apenas quando necessário (modal manual / importação)
+  const ensureProdutosLoaded = useCallback(async () => {
+    if (produtos.length > 0) return produtos
+    setLoadingProdutos(true)
+    try {
+      const prods = await getProdutos({
+        fields:
+          'id,codigo,nome,marca,secao,unidade_medida,peso_caixa_kg,pecas_por_caixa,peso_peca_kg,ativo',
+      })
+      setProdutos(prods)
+      return prods
+    } catch (err) {
+      console.error('Erro ao carregar produtos sob demanda:', err)
+      return []
+    } finally {
+      setLoadingProdutos(false)
+    }
+  }, [produtos.length])
+
   const loadData = useCallback(async () => {
     if (!id || isDeletedRef.current) return
     try {
-      const [rom, listItens, listProds, config] = await Promise.all([
+      const [rom, listItens, config] = await Promise.all([
         getRomaneio(id),
         getRomaneioItens(id),
-        getProdutos(),
         getConfiguracoes().catch(() => null),
       ])
 
       setRomaneio(rom)
       setObsText(rom.observacoes || '')
       setItens(listItens)
-      setProdutos(listProds)
       setConfigContato(config?.telefone_contato || '')
     } catch (err: any) {
       // Se retornar 404 Not Found, o romaneio foi excluído
@@ -144,10 +163,8 @@ export default function RomaneioDetail() {
       refreshingRef.current = true
       setRefreshing(true)
       try {
-        const freshProdutos = await getProdutos()
-        setProdutos(freshProdutos)
         const currentItens = await getRomaneioItens(id)
-        const updatedCount = await refreshRomaneioItens(currentItens, freshProdutos)
+        const updatedCount = await refreshRomaneioItens(currentItens)
         if (showToast) {
           toast.success(
             updatedCount > 0
@@ -155,7 +172,11 @@ export default function RomaneioDetail() {
               : 'Nenhum item precisou de atualização.',
           )
         }
-        if (updatedCount > 0) loadData()
+        if (updatedCount > 0) {
+          await loadData()
+        } else {
+          setItens(currentItens)
+        }
       } catch {
         if (showToast) toast.error('Erro ao atualizar romaneio')
       } finally {
@@ -271,6 +292,16 @@ export default function RomaneioDetail() {
     } catch {
       toast.error('Erro ao alterar status')
     }
+  }
+
+  const handleOpenManualModal = async () => {
+    setManualItemModal(true)
+    ensureProdutosLoaded()
+  }
+
+  const handleOpenImportWizard = async () => {
+    await ensureProdutosLoaded()
+    setImportWizardOpen(true)
   }
 
   const handleAddManualItem = async (e: React.FormEvent) => {
@@ -563,14 +594,17 @@ export default function RomaneioDetail() {
             {!isFinalizado && (
               <>
                 <Button
-                  onClick={() => setImportWizardOpen(true)}
+                  onClick={handleOpenImportWizard}
+                  disabled={loadingProdutos}
                   className="bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl"
                 >
-                  <FileSpreadsheet className="w-4 h-4 mr-2" /> Importar Planilha
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  {loadingProdutos ? 'Carregando...' : 'Importar Planilha'}
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setManualItemModal(true)}
+                  onClick={handleOpenManualModal}
+                  disabled={loadingProdutos}
                   className="rounded-xl font-semibold"
                 >
                   <Plus className="w-4 h-4 mr-1" /> Item Manual

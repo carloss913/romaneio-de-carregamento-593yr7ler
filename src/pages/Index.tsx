@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { Truck, ChevronRight, FileText, Scale, CheckCircle2, Package, Plus } from 'lucide-react'
 import { Romaneio, RomaneioItem } from '@/types/database'
 import { formatWeight } from '@/lib/conversion'
-import { getRomaneios } from '@/services/romaneios'
 import pb from '@/lib/pocketbase/client'
 import { RouteBadge } from '@/components/RouteBadge'
 import { Button } from '@/components/ui/button'
@@ -18,47 +17,70 @@ export default function Index() {
   const [novoModalOpen, setNovoModalOpen] = useState(false)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const targetIdsRef = useRef<string[]>([])
+  const itensDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const loadItensForRomaneios = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) {
+      setItens([])
+      return
+    }
+    const filterStr = ids.map((id) => `romaneio="${id}"`).join(' || ')
+    try {
+      const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
+        filter: filterStr,
+        fields: 'id,romaneio,peso_total_kg,caixas,pecas',
+      })
+      setItens(relevantItens)
+    } catch (errItens: any) {
+      if (
+        errItens?.status === 404 ||
+        errItens?.response?.code === 404 ||
+        errItens?.message?.includes('404')
+      ) {
+        setItens([])
+      } else {
+        console.error('Erro ao carregar itens do painel:', errItens)
+      }
+    }
+  }, [])
+
   const loadData = useCallback(async () => {
     try {
-      const roms = await getRomaneios()
-      setRomaneios(roms)
-      if (roms.length > 0) {
-        // Romaneios de hoje e os 5 mais recentes precisam de itens para calcular métricas
-        const todayPrefix = new Date().toISOString().split('T')[0]
-        const relevantRomsMap = new Map<string, Romaneio>()
-        // Adiciona romaneios de hoje
-        roms
-          .filter((r) => r.data.startsWith(todayPrefix))
-          .forEach((r) => relevantRomsMap.set(r.id, r))
-        // Adiciona os 5 mais recentes
-        roms.slice(0, 5).forEach((r) => relevantRomsMap.set(r.id, r))
+      const todayPrefix = new Date().toISOString().split('T')[0]
+      const startOfDay = `${todayPrefix} 00:00:00.000Z`
+      const endOfDay = `${todayPrefix} 23:59:59.999Z`
 
-        const targetIds = Array.from(relevantRomsMap.keys())
-        if (targetIds.length > 0) {
-          const filterStr = targetIds.map((id) => `romaneio="${id}"`).join(' || ')
-          try {
-            const relevantItens = await pb.collection('romaneio_itens').getFullList<RomaneioItem>({
-              filter: filterStr,
-              fields: 'id,romaneio,peso_total_kg,caixas,pecas',
-            })
-            setItens(relevantItens)
-          } catch (errItens: any) {
-            if (
-              errItens?.status === 404 ||
-              errItens?.response?.code === 404 ||
-              errItens?.message?.includes('404')
-            ) {
-              setItens([])
-            } else {
-              console.error('Erro ao carregar itens do painel:', errItens)
-            }
-          }
-        } else {
-          setItens([])
-        }
-      } else {
-        setItens([])
-      }
+      // Busca concorrente leve: APENAS romaneios de hoje + os 5 mais recentes
+      const [hojeResult, recentesResult] = await Promise.all([
+        pb.collection('romaneios').getFullList<Romaneio>({
+          filter: `data >= "${startOfDay}" && data <= "${endOfDay}"`,
+          sort: '-data,-created',
+        }),
+        pb.collection('romaneios').getList<Romaneio>(1, 5, {
+          sort: '-data,-created',
+        }),
+      ])
+
+      // Mescla sem duplicatas preservando a lista para renderização e cálculo
+      const romsMap = new Map<string, Romaneio>()
+      hojeResult.forEach((r) => romsMap.set(r.id, r))
+      recentesResult.items.forEach((r) => romsMap.set(r.id, r))
+
+      // Ordena por data e criação decrescente
+      const roms = Array.from(romsMap.values()).sort((a, b) => {
+        const da = new Date(a.data).getTime()
+        const db = new Date(b.data).getTime()
+        if (da !== db) return db - da
+        return new Date(b.created).getTime() - new Date(a.created).getTime()
+      })
+
+      setRomaneios(roms)
+
+      const targetIds = Array.from(romsMap.keys())
+      targetIdsRef.current = targetIds
+
+      await loadItensForRomaneios(targetIds)
     } catch (err: any) {
       if (err?.status === 404 || err?.response?.code === 404 || err?.message?.includes('404')) {
         setRomaneios([])
@@ -67,7 +89,7 @@ export default function Index() {
       }
       console.error('Erro ao carregar dados do painel:', err)
     }
-  }, [])
+  }, [loadItensForRomaneios])
 
   const debouncedLoadData = useCallback(() => {
     if (debounceTimerRef.current) {
@@ -75,8 +97,71 @@ export default function Index() {
     }
     debounceTimerRef.current = setTimeout(() => {
       loadData()
-    }, 500)
+    }, 1000)
   }, [loadData])
+
+  const handleItensRealtime = useCallback(
+    (e: { action: string; record: any }) => {
+      const record = e?.record
+      if (!record || !record.romaneio) return
+
+      // Se o item não pertence a nenhum dos romaneios visíveis, ignora completamente
+      if (!targetIdsRef.current.includes(record.romaneio)) {
+        return
+      }
+
+      // Aplica a alteração localmente no estado em memória para resposta instantânea sem requisição ao servidor
+      if (e.action === 'create') {
+        const newItem: RomaneioItem = {
+          id: record.id,
+          collectionId: record.collectionId || '',
+          collectionName: record.collectionName || 'romaneio_itens',
+          romaneio: record.romaneio,
+          produto: record.produto,
+          peso_total_kg: record.peso_total_kg !== undefined ? Number(record.peso_total_kg) : 0,
+          caixas: record.caixas !== undefined ? Number(record.caixas) : 0,
+          pecas: record.pecas !== undefined ? Number(record.pecas) : 0,
+          carregado: Boolean(record.carregado),
+          observacao: record.observacao || '',
+          created: record.created || '',
+          updated: record.updated || '',
+        }
+        setItens((prev) => (prev.some((i) => i.id === record.id) ? prev : [...prev, newItem]))
+      } else if (e.action === 'update') {
+        setItens((prev) =>
+          prev.map((i) =>
+            i.id === record.id
+              ? {
+                  ...i,
+                  peso_total_kg:
+                    record.peso_total_kg !== undefined
+                      ? Number(record.peso_total_kg)
+                      : i.peso_total_kg,
+                  caixas: record.caixas !== undefined ? Number(record.caixas) : i.caixas,
+                  pecas: record.pecas !== undefined ? Number(record.pecas) : i.pecas,
+                  carregado:
+                    record.carregado !== undefined ? Boolean(record.carregado) : i.carregado,
+                  observacao: record.observacao !== undefined ? record.observacao : i.observacao,
+                }
+              : i,
+          ),
+        )
+      } else if (e.action === 'delete') {
+        setItens((prev) => prev.filter((i) => i.id !== record.id))
+      }
+
+      // Debounce suave de 2s para sincronizar caso algo tenha passado batido
+      if (itensDebounceTimerRef.current) {
+        clearTimeout(itensDebounceTimerRef.current)
+      }
+      itensDebounceTimerRef.current = setTimeout(() => {
+        if (targetIdsRef.current.length > 0) {
+          loadItensForRomaneios(targetIdsRef.current)
+        }
+      }, 2000)
+    },
+    [loadItensForRomaneios],
+  )
 
   useEffect(() => {
     loadData()
@@ -85,11 +170,14 @@ export default function Index() {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
       }
+      if (itensDebounceTimerRef.current) {
+        clearTimeout(itensDebounceTimerRef.current)
+      }
     }
   }, [loadData])
 
   useRealtime('romaneios', debouncedLoadData)
-  useRealtime('romaneio_itens', debouncedLoadData)
+  useRealtime('romaneio_itens', handleItensRealtime)
 
   const todayStr = new Date().toISOString().split('T')[0]
   const romaneiosHoje = romaneios.filter((r) => r.data.startsWith(todayStr))

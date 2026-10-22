@@ -18,7 +18,6 @@ import {
   updateRomaneioItem,
   refreshRomaneioItens,
 } from '@/services/romaneio_itens'
-import { getProdutos } from '@/services/produtos'
 import { getConfiguracoes } from '@/services/configuracoes'
 import {
   formatBoxesAndPieces,
@@ -114,9 +113,9 @@ export default function PublicLoading() {
         }
       }
 
-      // 2. Atualizar produtos e recarregar dados do servidor
-      const freshProdutos = await getProdutos()
-      const updatedCount = await refreshRomaneioItens(itens, freshProdutos)
+      // 2. Atualizar itens e recarregar dados do servidor usando dados expandidos dos itens
+      const freshItens = await getRomaneioItens(romaneio.id)
+      const updatedCount = await refreshRomaneioItens(freshItens)
       await loadData()
       if (showToast) {
         if (updatedCount > 0) {

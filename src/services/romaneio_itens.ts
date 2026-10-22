@@ -193,17 +193,20 @@ export const deleteItensByRomaneio = async (
 
 export const refreshRomaneioItens = async (
   itens: RomaneioItem[],
-  produtos: Produto[],
+  produtos?: Produto[],
 ): Promise<number> => {
   const produtoMap = new Map<string, Produto>()
-  for (const p of produtos) {
-    produtoMap.set(p.id, p)
+  if (produtos && produtos.length > 0) {
+    for (const p of produtos) {
+      produtoMap.set(p.id, p)
+    }
   }
 
   const itemsToUpdate: { id: string; caixas: number; pecas: number }[] = []
 
   for (const item of itens) {
-    const produto = produtoMap.get(item.produto)
+    // Usa produto passado no mapa ou usa o produto já expandido no próprio item
+    const produto = produtoMap.get(item.produto) || (item.expand?.produto as Produto | undefined)
     if (!produto) continue
 
     let needsUpdate = false
